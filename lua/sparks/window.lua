@@ -12,7 +12,7 @@ M.state = {
 -- 计算窗口位置
 local function get_window_position(config_pos, width, height)
 	local positions = {
-		["top-right"] = { row = 1, col = vim.o.columns - width - 1 },
+		["top-right"] = { row = 2, col = vim.o.columns - width - 2 },
 		["top-left"] = { row = 0, col = 0 },
 		["bottom-right"] = { row = vim.o.lines - height - 3, col = vim.o.columns - width - 2 },
 		["bottom-left"] = { row = vim.o.lines - height - 3, col = 0 },

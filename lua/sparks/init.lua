@@ -245,8 +245,9 @@ local function setup_autocmds()
 	end
 
 	if opts.show_on_delete then
-		local prev_line_count = 0
-		local prev_line_content = ""
+		local prev_line_count = api.nvim_buf_line_count(0)
+		local cursor_init = api.nvim_win_get_cursor(0)
+		local prev_line_content = api.nvim_buf_get_lines(0, cursor_init[1] - 1, cursor_init[1], false)[1] or ""
 
 		api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
 			group = group,
@@ -266,7 +267,7 @@ local function setup_autocmds()
 			end,
 		})
 
-		api.nvim_create_autocmd("BufEnter", {
+		api.nvim_create_autocmd({ "BufEnter", "CursorMoved", "CursorMovedI" }, {
 			group = group,
 			callback = function()
 				prev_line_count = api.nvim_buf_line_count(0)

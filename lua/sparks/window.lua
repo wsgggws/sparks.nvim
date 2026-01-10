@@ -8,18 +8,18 @@ local function calculate_adaptive_size()
 
 	if cols < 100 then
 		-- 小屏幕 (13寸 Mac)
-		width = 16
-		height = 8
+		width = 22
+		height = 12
 		offset = 3 -- 往左（增大间隙）
 	elseif cols < 150 then
 		-- 中等屏幕
-		width = 20
-		height = 10
+		width = 30
+		height = 16
 		offset = 4 -- 往左（增大间隙）
 	else
 		-- 大屏幕/扩展屏
-		width = 26
-		height = 12
+		width = 40
+		height = 20
 		offset = 5 -- 往左（增大间隙）
 	end
 

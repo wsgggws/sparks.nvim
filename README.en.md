@@ -6,6 +6,10 @@ The most satisfying typing effects plugin for Neovim.
 
 > "Coding has never been this addictive!"
 
+<div align="center">
+  <img src="assets/sparks-demo.gif" width="100%" />
+</div>
+
 [中文文档](README.md)
 
 ## ✨ Features
@@ -27,12 +31,15 @@ The most satisfying typing effects plugin for Neovim.
   - `explode` (On delete)
   - `matrix` (The Matrix style green rain)
   - `snow` (Gentle falling snow)
+  - `rain` (Vertical rain drops)
+  - `fizz` (Bubbling up)
   - `fire` (Rising flames)
   - `heart` (Floating love hearts ♥)
   - `sparkle` (Twinkling stars ✦)
 - **🔊 Immersive Sound**:
   - Switch sound packs instantly (`default`, `mechanical`, `sci-fi`)
-  - Smart throttling (50ms) prevents lag during rapid typing
+  - Smart throttling (80ms) prevents lag during rapid typing
+  - **macOS Optimization**: Uses `afplay` with playback rate acceleration (2.5x+) for crisp, mechanical-like feedback.
 - **⚡ Extreme Performance**:
   - **✨ Visual Fading**: Particles shrink and fade out naturally.
   - **🛡️ Smart Exclude**: Disabled in Telescope, NvimTree, etc.
@@ -65,8 +72,8 @@ require("sparks").setup({
 
   -- 🔥 Combo
   enable_combo = true,
-  combo_threshold = 5,    -- Start counter after 5 keystrokes
-  combo_timeout = 2000,   -- Reset after 2s idle
+  combo_threshold = 1,    -- Start counter from 1st keystroke
+  combo_timeout = 400,    -- Reset after 400ms idle
 
   -- Heat Map: Combo -> Mode
   heat_map = {
@@ -85,19 +92,22 @@ require("sparks").setup({
   triggers = {
     ["{"] = "explode",
     ["("] = "confetti",
+    ["["] = "matrix",
     ["!"] = "explode",
-    ["*"] = "snow",
-    ["^"] = "fire",
-    ["}"] = "matrix",
     ["?"] = "sparkle",
+    ["="] = "fizz",
+    [";"] = "rain",
+    [":"] = "rain",
+    ["+"] = "fire",
     ["<"] = "heart",
-    [">"] = "heart",
+    ["%"] = "confetti",
   },
 
   -- 🔊 Sound
   enable_sound = true,
   sound_on_insert = true, -- Play sound on insert
   sound_on_delete = true, -- Play sound on delete
+  sound_volume = 5.0,     -- Volume (0.0 - 5.0)
   sound_volume = 3.0,     -- (0.0 - 5.0)
   sound_pack = "default", -- default, mechanical, sci-fi
   -- Sound auto-throttles (50ms) to prevent lag

@@ -41,7 +41,7 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			y = y,
 			dx = math.cos(angle) * speed,
 			dy = math.sin(angle) * speed * 0.5, -- Y轴通常需要压扁一点适应字符高宽比
-			life = math.random(10, 20),
+			life = math.random(40, 60), -- 基础寿命延长 (原 30-45)
 			char = text or "*",
 			color = smart_color or palette[math.random(#palette)],
 			type = type, -- 'gravity', 'float', 'static'
@@ -55,18 +55,20 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			p.char = ({ ".", "o", "*", "~" })[math.random(4)]
 			p.dx = (math.random() - 0.5) * 1.5
 			p.dy = (math.random() - 0.5) * 1.0
-			p.life = 25
+			p.life = 60
 		elseif type == "fire" then
 			p.char = ({ "^", "*", ",", "." })[math.random(4)]
 			p.dy = -math.abs(p.dy) - 0.2 -- 总是向上
-			p.life = 15
+			p.life = 40
 			p.dx = p.dx * 0.5 -- 火焰横向扩散小一点
+			p.x = p.x + (math.random() - 0.5) * 2 -- 稍微打散底部
 		elseif type == "matrix" then
 			p.char = tostring(math.random(0, 1))
 			p.dx = 0
 			p.dy = math.random() * 0.5 + 0.5 -- 垂直下落
+			p.x = p.x + math.random(-2, 2) -- 【关键】横向随机偏移，形成宽幅代码雨
 			p.color = "String" -- 通常绿色
-			p.life = 40
+			p.life = 80
 			if heat_mode == "rainbow" then
 				p.color = nil
 			end
@@ -75,21 +77,36 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			p.dx = (math.random() - 0.5) * 0.5 -- 左右轻微飘动
 			p.dy = math.random() * 0.2 + 0.1 -- 缓慢下落
 			p.color = "Comment" -- 白色或淡灰
-			p.life = 60
+			p.life = 100
 		elseif type == "heart" then
 			p.char = ({ "♥", "♡" })[math.random(2)]
 			p.dx = 0
 			p.dy = -0.2 -- 缓缓上升
 			p.color = "Red" -- 红色 (需确保有 SparksRed 高亮或 fallback)
-			p.life = 50
+			p.life = 90
 			smart_color = "Error" -- 通常是红色
 		elseif type == "sparkle" then
 			p.char = "✦"
-			p.dx = 0
-			p.dy = 0
+			p.dx = (math.random() - 0.5) * 0.8 -- 给一点微小的漂浮移动
+			p.dy = (math.random() - 0.5) * 0.8
+			p.x = p.x + (math.random() - 0.5) * 3 -- 初始位置散开
+			p.y = p.y + (math.random() - 0.5) * 2
 			p.color = "WarningMsg"
-			p.life = 20
+			p.life = 50
 			-- 闪烁效果在 update 或 render 中处理，这里只做静态定义
+		elseif type == "rain" then
+			p.char = ({ "|", "!", "·" })[math.random(3)]
+			p.dx = 0
+			p.dy = math.random() * 0.5 + 0.5 -- 快速下落
+			p.x = p.x + math.random(-2, 2) -- 宽度展开，形成雨帘
+			p.color = "Function" -- 通常是蓝色
+			p.life = 60
+		elseif type == "fizz" then
+			p.char = ({ "o", "O", "." })[math.random(3)]
+			p.dx = (math.random() - 0.5) * 0.5
+			p.dy = -math.random() * 0.5 - 0.2 -- 向上冒泡
+			p.color = "Type" -- 通常是黄色/橙色
+			p.life = 70
 		end
 
 		-- 热度模式下的特殊处理
@@ -120,6 +137,8 @@ function M.update()
 		elseif p.type == "confetti" then
 			p.dy = p.dy + 0.05 -- 轻微重力
 			p.dx = p.dx * 0.98 -- 空气阻力
+		elseif p.type == "fizz" then
+			p.dx = p.dx + (math.random() - 0.5) * 0.1 -- 气泡左右摇摆
 		end
 
 		-- 视觉淡出效果 (Visual Fading)

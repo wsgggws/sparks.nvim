@@ -17,7 +17,7 @@ M.defaults = {
 	enable_sound = true, -- 启用声音（默认关闭）
 	sound_on_insert = true, -- 输入时播放声音
 	sound_on_delete = true, -- 删除时播放声音
-	sound_volume = 3.0, -- 音量 (0.0 - 5.0)
+	sound_volume = 5.0, -- 音量 (0.0 - 5.0)
 	-- 可配置多个声音文件，随机选择一个播放
 	-- 如果为空或 nil，将使用系统默认声音
 	sound_file_insert = nil, -- 输入时的声音文件列表 (nil = 使用系统默认)
@@ -26,8 +26,8 @@ M.defaults = {
 
 	-- Combo (连击) 系统
 	enable_combo = true,
-	combo_threshold = 5,
-	combo_timeout = 2000,
+	combo_threshold = 1,
+	combo_timeout = 400,
 	heat_map = {
 		[10] = "rainbow", -- 连击 > 10 开启彩虹粒子
 		[20] = "fire", -- 连击 > 20 开启火焰模式

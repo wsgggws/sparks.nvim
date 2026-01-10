@@ -6,7 +6,7 @@ local last_play_time = {
 	insert = 0,
 	delete = 0,
 }
-local sound_throttle_ms = 50 -- 50ms 内相同类型声音只播放一次
+local sound_throttle_ms = 80 -- 优化：80ms 内相同类型声音只播放一次，避免机关枪效应
 
 -- 播放声音
 function M.play(sound_type, config)
@@ -64,7 +64,9 @@ function M.play(sound_type, config)
 			local sound_file = sound_files[math.random(#sound_files)]
 
 			if is_mac then
-				sound_cmd = string.format("afplay '%s' -v %.2f &", sound_file, config.sound_volume)
+				-- 优化：播放速率提高到 2.5倍 - 3.2倍，极短促，高频输入不粘连
+				local rate = 2.5 + math.random() * 0.7
+				sound_cmd = string.format("afplay '%s' -v %.2f -r %.2f &", sound_file, config.sound_volume, rate)
 			elseif is_linux then
 				-- Linux 使用 paplay (PulseAuuvplay (ALSA)
 				if vim.fn.executable("paplay") == 1 then
@@ -85,8 +87,10 @@ function M.play(sound_type, config)
 			if is_mac then
 				-- macOS 系统默认音效
 				local default_sound = sound_type == "insert" and "Pop" or "Bottle"
+				-- 优化：播放速率提高到 2.5倍 - 3.2倍
+				local rate = 2.5 + math.random() * 0.7
 				sound_cmd =
-					string.format("afplay /System/Library/Sounds/%s.aiff -v %.2f &", default_sound, config.sound_volume)
+					string.format("afplay /System/Library/Sounds/%s.aiff -v %.2f -r %.2f &", default_sound, config.sound_volume, rate)
 			elseif is_linux then
 				-- Linux 系统默认音效
 				if vim.fn.executable("paplay") == 1 then

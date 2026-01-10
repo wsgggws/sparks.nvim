@@ -41,7 +41,7 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			y = y,
 			dx = math.cos(angle) * speed,
 			dy = math.sin(angle) * speed * 0.5, -- Y轴通常需要压扁一点适应字符高宽比
-			life = math.random(10, 20),
+			life = math.random(30, 45), -- 基础寿命延长
 			char = text or "*",
 			color = smart_color or palette[math.random(#palette)],
 			type = type, -- 'gravity', 'float', 'static'
@@ -55,18 +55,18 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			p.char = ({ ".", "o", "*", "~" })[math.random(4)]
 			p.dx = (math.random() - 0.5) * 1.5
 			p.dy = (math.random() - 0.5) * 1.0
-			p.life = 25
+			p.life = 40
 		elseif type == "fire" then
 			p.char = ({ "^", "*", ",", "." })[math.random(4)]
 			p.dy = -math.abs(p.dy) - 0.2 -- 总是向上
-			p.life = 15
+			p.life = 25
 			p.dx = p.dx * 0.5 -- 火焰横向扩散小一点
 		elseif type == "matrix" then
 			p.char = tostring(math.random(0, 1))
 			p.dx = 0
 			p.dy = math.random() * 0.5 + 0.5 -- 垂直下落
 			p.color = "String" -- 通常绿色
-			p.life = 40
+			p.life = 60
 			if heat_mode == "rainbow" then
 				p.color = nil
 			end
@@ -75,20 +75,20 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			p.dx = (math.random() - 0.5) * 0.5 -- 左右轻微飘动
 			p.dy = math.random() * 0.2 + 0.1 -- 缓慢下落
 			p.color = "Comment" -- 白色或淡灰
-			p.life = 60
+			p.life = 80
 		elseif type == "heart" then
 			p.char = ({ "♥", "♡" })[math.random(2)]
 			p.dx = 0
 			p.dy = -0.2 -- 缓缓上升
 			p.color = "Red" -- 红色 (需确保有 SparksRed 高亮或 fallback)
-			p.life = 50
+			p.life = 70
 			smart_color = "Error" -- 通常是红色
 		elseif type == "sparkle" then
 			p.char = "✦"
 			p.dx = 0
 			p.dy = 0
 			p.color = "WarningMsg"
-			p.life = 20
+			p.life = 35
 			-- 闪烁效果在 update 或 render 中处理，这里只做静态定义
 		end
 

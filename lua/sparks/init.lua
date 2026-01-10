@@ -73,22 +73,18 @@ local function start_animation_loop()
 			-- 1. 更新粒子
 			local has_particles = particles.update()
 
-			-- 2. 检查 Combo 超时
+			-- 2. 状态超时检查
 			local now = uv.now()
-			local timeout = config_mod.options.combo_timeout
+			local combo_timeout = config_mod.options.combo_timeout
 
-			-- 若无连击，文本只需短暂停留 (如删除操作)
-			if state.combo_count == 0 then
-				timeout = 500
-			end
-
-			if now - state.last_activity > timeout then
-				state.combo_count = 0
+			-- 优化：active_text 超时消失，但保留 combo_count 供下次累积
+			if now - state.last_activity > combo_timeout then
 				state.active_text = nil
 			end
 
 			-- 3. 如果没有粒子也没 Combo 显示，停止循环
-			if not has_particles and state.combo_count == 0 and not state.active_text then
+			-- 即使有 combo_count (在后台保持)，只要没显示 active_text 且没粒子，就关闭
+			if not has_particles and not state.active_text then
 				if state.timer then
 					state.timer:stop()
 					state.timer:close()
@@ -102,28 +98,37 @@ local function start_animation_loop()
 			local grid = particles.generate_grid()
 
 			-- 5. 将主文本 (Combo 或 当前字符) 叠加到网格中心
+			local cx_center = math.floor(particles.width / 2)
+			local cy_center = math.floor(particles.height / 2)
+
 			if state.active_text then
-				local cx = math.floor(particles.width / 2) - math.floor(#state.active_text / 2)
-				local cy = math.floor(particles.height / 2)
-				for i = 1, #state.active_text do
-					local char = state.active_text:sub(i, i)
-					if grid[cy] and grid[cy][cx + i] == nil then
-						-- 只有本格子没有粒子时才覆盖，或者粒子可以覆盖文字
-						grid[cy][cx + i] = { char = char, color = "SparksString" }
+				local display_str = ""
+				local parts = {}
+
+				table.insert(parts, { text = state.active_text, color = "SparksString" })
+
+				if config_mod.options.enable_combo and state.combo_count >= config_mod.options.combo_threshold then
+					table.insert(parts, { text = string.format("x%d", state.combo_count), color = "SparksWarning" })
+				end
+
+				-- 计算总长度并构建渲染数据
+				local total_len = 0
+				for i, part in ipairs(parts) do
+					total_len = total_len + #part.text
+					if i < #parts then
+						total_len = total_len + 1 -- padding
 					end
 				end
 
-				-- 如果有 Combo，在下方显示
-				if config_mod.options.enable_combo and state.combo_count >= config_mod.options.combo_threshold then
-					local combo_str = string.format("x%d", state.combo_count)
-					local cx2 = math.floor(particles.width / 2) - math.floor(#combo_str / 2)
-					local cy2 = cy + 2
-					if grid[cy2] then
-						for i = 1, #combo_str do
-							local char = combo_str:sub(i, i)
-							grid[cy2][cx2 + i] = { char = char, color = "SparksWarning" }
-						end
+				local start_x = cx_center - math.floor(total_len / 2)
+				local current_x = start_x
+
+				for i, part in ipairs(parts) do
+					for j = 1, #part.text do
+						local char = part.text:sub(j, j)
+						grid[cy_center][current_x + j] = { char = char, color = part.color }
 					end
+					current_x = current_x + #part.text + 1 -- plus padding
 				end
 			end
 
@@ -173,7 +178,7 @@ local function trigger_effect(char, type)
 	if type == "insert" then
 		state.combo_count = state.combo_count + 1
 	elseif type == "delete" then
-		-- 删除不增加 combo
+		state.combo_count = 0 -- 删除打断连击，确保 Combo 计数和字符同时消失
 	end
 
 	-- 计算热度等级

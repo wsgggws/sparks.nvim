@@ -1,6 +1,13 @@
 local M = {}
 local uv = vim.uv or vim.loop
 
+-- 声音播放节流状态
+local last_play_time = {
+	insert = 0,
+	delete = 0,
+}
+local sound_throttle_ms = 50 -- 50ms 内相同类型声音只播放一次
+
 -- 播放声音
 function M.play(sound_type, config)
 	if not config.enable_sound then
@@ -12,6 +19,13 @@ function M.play(sound_type, config)
 	if sound_type == "delete" and not config.sound_on_delete then
 		return
 	end
+
+	-- 声音节流：防止快速连续触发造成卡顿
+	local now = uv.now()
+	if now - last_play_time[sound_type] < sound_throttle_ms then
+		return
+	end
+	last_play_time[sound_type] = now
 
 	-- 检测操作系统并播放声音
 	vim.schedule(function()

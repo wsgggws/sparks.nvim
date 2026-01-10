@@ -1,20 +1,46 @@
 local M = {}
 local api = vim.api
 
+-- 根据屏幕大小计算窗口尺寸
+local function calculate_adaptive_size()
+	local cols = vim.o.columns
+	local width, height, offset
+
+	if cols < 100 then
+		-- 小屏幕 (13寸 Mac)
+		width = 16
+		height = 8
+		offset = 3 -- 往左（增大间隙）
+	elseif cols < 150 then
+		-- 中等屏幕
+		width = 20
+		height = 10
+		offset = 4 -- 往左（增大间隙）
+	else
+		-- 大屏幕/扩展屏
+		width = 26
+		height = 12
+		offset = 5 -- 往左（增大间隙）
+	end
+
+	return width, height, offset
+end
+
 M.state = {
 	buf = nil,
 	win = nil,
 	width = 20,
-	height = 8,
+	height = 10,
 	shake_offset = nil,
 }
 
 -- 计算窗口位置
 local function get_window_position(config_pos, width, height)
+	local _, _, offset = calculate_adaptive_size()
 	local positions = {
-		["top-right"] = { row = 2, col = vim.o.columns - width - 2 },
+		["top-right"] = { row = 0, col = vim.o.columns - width - offset }, -- row=0 往上（减小距离）
 		["top-left"] = { row = 0, col = 0 },
-		["bottom-right"] = { row = vim.o.lines - height - 3, col = vim.o.columns - width - 2 },
+		["bottom-right"] = { row = vim.o.lines - height - 3, col = vim.o.columns - width - offset },
 		["bottom-left"] = { row = vim.o.lines - height - 3, col = 0 },
 	}
 	return positions[config_pos] or positions["top-right"]
@@ -46,6 +72,11 @@ function M.shake(intensity)
 end
 
 function M.create(config)
+	-- 自适应计算窗口大小
+	local width, height, _ = calculate_adaptive_size()
+	M.state.width = width
+	M.state.height = height
+
 	-- 复用窗口逻辑
 	if M.state.win and api.nvim_win_is_valid(M.state.win) then
 		-- 如果窗口因为某些原因变得不可见或被覆盖，可能需要重新置顶，这里暂且认为 valid 就可用
@@ -90,6 +121,10 @@ function M.create(config)
 	}
 
 	M.state.win = api.nvim_open_win(M.state.buf, false, opts)
+
+	if config.winblend then
+		api.nvim_set_option_value("winblend", config.winblend, { win = M.state.win })
+	end
 
 	-- 设置高亮
 	vim.api.nvim_set_option_value(

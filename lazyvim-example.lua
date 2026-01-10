@@ -1,13 +1,11 @@
 -- LazyVim 配置示例
--- 将此文件放到 ~/.config/nvim/lua/plugins/sparks.lua
 
 return {
 	"wsgggws/sparks.nvim",
 	event = "VeryLazy",
-
 	opts = {
 		enabled = true,
-		position = "top-right",
+		position = "top-right", -- 会根据屏幕大小自动调整位置和尺寸
 
 		-- 🚀 粒子系统
 		animation_fps = 30,
@@ -25,6 +23,10 @@ return {
 		enable_shake = true,
 		shake_intensity = 1,
 
+		-- 输入/删除特效
+		show_on_insert = true, -- 输入字符时显示动画
+		show_on_delete = true, -- 删除字符时显示动画（仅插入模式）
+
 		-- 🎹 特殊按键触发器
 		triggers = {
 			["{"] = "explode",
@@ -33,10 +35,21 @@ return {
 			["*"] = "snow",
 			["!"] = "explode",
 			["^"] = "fire",
+			["?"] = "sparkle",
+			["<"] = "heart",
+			[">"] = "heart",
 		},
 
-		-- 🔊 声音
+		-- 🔊 声音（自动节流 50ms，避免卡顿）
 		enable_sound = true,
+		sound_on_insert = true,
+		sound_on_delete = true,
+		sound_volume = 3.0,
 		sound_pack = "default", -- mechanical, sci-fi
+
+		-- 性能优化
+		throttle = 100, -- 输入节流
+		ignore_paste = true,
+		disable_on_macro = true,
 	},
 }

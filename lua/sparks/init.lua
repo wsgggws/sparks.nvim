@@ -32,7 +32,21 @@ local function start_animation_loop()
 		return
 	end
 
-	particles.init(20, 8) -- 初始化粒子系统
+	-- 使用与窗口相同的自适应大小
+	local cols = vim.o.columns
+	local width, height
+	if cols < 100 then
+		width, height = 16, 8
+	elseif cols < 150 then
+		width, height = 20, 10
+	else
+		width, height = 26, 12
+	end
+
+	if particles.width == 0 or particles.height == 0 then
+		particles.width = width
+		particles.height = height
+	end
 	window.create(config_mod.options)
 
 	state.timer = uv.new_timer()
@@ -148,6 +162,7 @@ local function trigger_effect(char, type)
 			anim_type = config_mod.options.triggers[char]
 		end
 	else
+		-- 删除操作使用爆炸效果
 		anim_type = "explode"
 	end
 
@@ -201,7 +216,7 @@ local function trigger_effect(char, type)
 
 		sound.play("insert", config_mod.options)
 	elseif type == "delete" then
-		state.active_text = "💥"
+		state.active_text = nil
 		particles.spawn(center_x, center_y, 8, "explode", char, heat_mode)
 		sound.play("delete", config_mod.options)
 
@@ -245,34 +260,93 @@ local function setup_autocmds()
 	end
 
 	if opts.show_on_delete then
-		local prev_line_count = api.nvim_buf_line_count(0)
-		local cursor_init = api.nvim_win_get_cursor(0)
-		local prev_line_content = api.nvim_buf_get_lines(0, cursor_init[1] - 1, cursor_init[1], false)[1] or ""
+		-- 将 prev_* 变量提升到函数作用域，方便 InsertCharPre 也能访问和更新
+		local prev_line_count = -1
+		local prev_line_content = ""
+		local prev_row = -1
+		local is_insert_char = false -- 标记是否正在输入字符
 
-		api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+		local function sync_state()
+			if not api.nvim_buf_is_valid(0) then
+				return
+			end
+			prev_line_count = api.nvim_buf_line_count(0)
+			local cursor = api.nvim_win_get_cursor(0)
+			prev_row = cursor[1]
+			local lines = api.nvim_buf_get_lines(0, prev_row - 1, prev_row, false)
+			prev_line_content = lines[1] or ""
+		end
+
+		-- 立即初始化
+		if api.nvim_buf_is_valid(0) then
+			sync_state()
+		end
+
+		-- 如果插件加载时已经在插入模式中，立即同步状态
+		local current_mode = api.nvim_get_mode().mode
+		if current_mode:match("^[iR]") then
+			sync_state()
+		end
+
+		-- 在字符输入前设置标记并同步状态
+		api.nvim_create_autocmd("InsertCharPre", {
 			group = group,
 			callback = function()
-				if not throttle() then
-					return
-				end
-				local curr_line_count = api.nvim_buf_line_count(0)
-				local cursor = api.nvim_win_get_cursor(0)
-				local curr_line_content = api.nvim_buf_get_lines(0, cursor[1] - 1, cursor[1], false)[1] or ""
-
-				if curr_line_count < prev_line_count or #curr_line_content < #prev_line_content then
-					trigger_effect("X", "delete")
-				end
-				prev_line_count = curr_line_count
-				prev_line_content = curr_line_content
+				is_insert_char = true
+				sync_state()
 			end,
 		})
 
-		api.nvim_create_autocmd({ "BufEnter", "CursorMoved", "CursorMovedI" }, {
+		api.nvim_create_autocmd("TextChangedI", {
 			group = group,
 			callback = function()
-				prev_line_count = api.nvim_buf_line_count(0)
+				if is_insert_char then
+					is_insert_char = false
+					sync_state()
+					return
+				end
+
+				local curr_line_count = api.nvim_buf_line_count(0)
 				local cursor = api.nvim_win_get_cursor(0)
-				prev_line_content = api.nvim_buf_get_lines(0, cursor[1] - 1, cursor[1], false)[1] or ""
+				local curr_row = cursor[1]
+				local curr_line_content = api.nvim_buf_get_lines(0, curr_row - 1, curr_row, false)[1] or ""
+
+				-- 如果有之前的状态，验证确实是删除
+				local is_confirmed_delete = false
+				if prev_line_count ~= -1 then
+					if curr_line_count < prev_line_count then
+						is_confirmed_delete = true
+					elseif curr_line_count == prev_line_count and #curr_line_content < #prev_line_content then
+						is_confirmed_delete = true
+					end
+				end
+
+				if prev_line_count == -1 or is_confirmed_delete then
+					trigger_effect("X", "delete")
+				end
+
+				sync_state()
+			end,
+		})
+
+		api.nvim_create_autocmd("CursorMovedI", {
+			group = group,
+			callback = function()
+				local curr_cnt = api.nvim_buf_line_count(0)
+				if curr_cnt == prev_line_count then
+					local cursor = api.nvim_win_get_cursor(0)
+					if cursor[1] ~= prev_row then
+						sync_state()
+					end
+				end
+			end,
+		})
+
+		-- 进入插入模式时立即同步，不使用异步延迟
+		api.nvim_create_autocmd("InsertEnter", {
+			group = group,
+			callback = function()
+				sync_state()
 			end,
 		})
 	end
@@ -284,12 +358,23 @@ function M.setup(opts)
 		return
 	end
 
+	-- 诊断：检测加载时机
+	local current_mode = api.nvim_get_mode().mode
+	if current_mode:match("^[iR]") then
+		vim.notify(
+			"Sparks: 插件在插入模式中加载。如果删除动画不工作，请将加载事件改为 'InsertEnter'",
+			vim.log.levels.WARN
+		)
+	end
+
 	-- 设置高亮
-	local normal_bg = vim.api.nvim_get_hl(0, { name = "Normal", link = false }).bg
-	vim.api.nvim_set_hl(0, "SparksFloat", { bg = normal_bg, fg = "NONE" })
+	-- 使用 bg=NONE 以支持透明背景和 winblend
+	vim.api.nvim_set_hl(0, "SparksFloat", { bg = "NONE", fg = "NONE" })
+
 	local function create_nobg_hl(name, base)
 		local hl = vim.api.nvim_get_hl(0, { name = base, link = false })
-		vim.api.nvim_set_hl(0, name, { fg = hl.fg, bg = normal_bg, bold = hl.bold, italic = hl.italic })
+		-- 这里的 bg 设为 NONE，否则每个字符会有不透明的背景框
+		vim.api.nvim_set_hl(0, name, { fg = hl.fg, bg = "NONE", bold = hl.bold, italic = hl.italic })
 	end
 	create_nobg_hl("SparksString", "String")
 	create_nobg_hl("SparksNumber", "Number")

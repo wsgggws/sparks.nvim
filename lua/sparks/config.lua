@@ -54,6 +54,9 @@ M.defaults = {
 	ignore_paste = true, -- 在粘贴模式下禁用动画
 	disable_on_macro = true, -- 在宏录制/播放时禁用动画
 
+	-- 外观配置
+	winblend = 0, -- 窗口透明度 (0-100)，设置为 10-20 可以让背景更自然
+
 	-- 🛡️ 智能屏蔽 (列表中的 filetype 或 buftype 将不触发动画)
 	excluded_filetypes = { "TelescopePrompt", "NvimTree", "neo-tree", "lazy", "mason", "dashboard" },
 	excluded_buftypes = { "nofile", "terminal", "prompt" },

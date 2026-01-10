@@ -20,6 +20,8 @@ The most satisfying typing effects plugin for Neovim.
   your code's highlighting.
 - **💥 Screen Shake**: Optional screen shake on high-combo moments or deletions
   for extra impact.
+- **📱 Adaptive Layout**: Automatically adjusts animation window size and position
+  based on screen size for perfect display on small/large screens.
 - **🎭 Diverse Effects**:
   - `confetti` (Default)
   - `explode` (On delete)
@@ -28,8 +30,9 @@ The most satisfying typing effects plugin for Neovim.
   - `fire` (Rising flames)
   - `heart` (Floating love hearts ♥)
   - `sparkle` (Twinkling stars ✦)
-- **🔊 Immersive Sound**: Switch sound packs instantly
-  (`default`, `mechanical`, `sci-fi`).
+- **🔊 Immersive Sound**:
+  - Switch sound packs instantly (`default`, `mechanical`, `sci-fi`)
+  - Smart throttling (50ms) prevents lag during rapid typing
 - **⚡ Extreme Performance**:
   - **✨ Visual Fading**: Particles shrink and fade out naturally.
   - **🛡️ Smart Exclude**: Disabled in Telescope, NvimTree, etc.
@@ -52,10 +55,10 @@ The most satisfying typing effects plugin for Neovim.
 ## ⚙️ Configuration
 
 ```lua
-require("fireworks").setup({
+require("sparks").setup({
   -- Basic
   enabled = true,
-  position = "top-right",
+  position = "top-right", -- Auto-adjusts based on screen size
 
   -- 🚀 Physics
   animation_fps = 30,     -- (Recommend 30-60)
@@ -74,6 +77,10 @@ require("fireworks").setup({
   -- 🫨 Impact
   enable_shake = true,    -- Screen shake on big combos
 
+  -- Insert/Delete effects
+  show_on_insert = true,  -- Show animation on character input
+  show_on_delete = true,  -- Show animation on delete (insert mode only)
+
   -- ⌨️ Triggers (Key -> Effect)
   triggers = {
     ["{"] = "explode",
@@ -89,18 +96,29 @@ require("fireworks").setup({
 
   -- 🔊 Sound
   enable_sound = true,
+  sound_on_insert = true, -- Play sound on insert
+  sound_on_delete = true, -- Play sound on delete
   sound_volume = 3.0,     -- (0.0 - 5.0)
   sound_pack = "default", -- default, mechanical, sci-fi
+  -- Sound auto-throttles (50ms) to prevent lag
 
   -- 🛡️ Smart Exclude
+  excluded_filetypes = {
     "TelescopePrompt",
     "NvimTree",
     "neo-tree",
     "lazy",
     "mason",
-
-  excluded_filetypes = { "TelescopePrompt", "NvimTree", "neo-tree", "lazy", "mason" },
+  },
   excluded_buftypes = { "nofile", "terminal", "prompt" },
+
+  -- Performance
+  throttle = 100,         -- Throttle time (ms)
+  ignore_paste = true,    -- Disable in paste mode
+  disable_on_macro = true,-- Disable during macro recording/execution
+
+  -- Appearance
+  winblend = 0,           -- Transparency (0-100). Try 10-20 if float blocks cursorline
 })
 ```
 

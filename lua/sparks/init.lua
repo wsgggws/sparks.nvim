@@ -161,7 +161,7 @@ local function trigger_effect(char, type)
 	end
 
 	-- 检查自定义触发器
-	local anim_type = "confetti"
+	local anim_type = config_mod.options.default_effect or "confetti"
 	if type == "insert" then
 		if config_mod.options.triggers[char] then
 			anim_type = config_mod.options.triggers[char]
@@ -208,11 +208,16 @@ local function trigger_effect(char, type)
 		local spawn_count = 3 -- 默认
 		if anim_type == "matrix" then spawn_count = 8 end
 		if anim_type == "sparkle" then spawn_count = 6 end
+		-- 添加你的特效
 		if anim_type == "fire" then spawn_count = 6 end
 		if anim_type == "rain" then spawn_count = 5 end
 		if anim_type == "fizz" then spawn_count = 7 end
 		if anim_type == "explode" then spawn_count = 8 end
 		if anim_type == "snow" then spawn_count = 5 end
+		if anim_type == "yueyue" then spawn_count = 9 end
+		if anim_type == "manman" then spawn_count = 9 end
+		if anim_type == "nghuhu" then spawn_count = 9 end
+		if anim_type == "shenyiao" then spawn_count = 9 end
 
 		-- 每次按键发射粒子
 		particles.spawn(center_x, center_y, spawn_count, anim_type, char, heat_mode)
@@ -396,6 +401,9 @@ function M.setup(opts)
 	create_nobg_hl("SparksNumber", "Number")
 	create_nobg_hl("SparksWarning", "WarningMsg")
 	create_nobg_hl("SparksComment", "Comment")
+
+	-- 自定义颜色
+	vim.api.nvim_set_hl(0, "SparksMangoYellow", { fg = "#FFD700", bg = "NONE", bold = true }) -- 纯金黄
 
 	setup_autocmds()
 

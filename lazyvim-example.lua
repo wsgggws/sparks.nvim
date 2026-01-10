@@ -9,6 +9,7 @@ return {
 
 		-- 🚀 粒子系统
 		animation_fps = 30,
+		default_effect = "confetti", -- 默认特效：confetti, fireworks, sparkle, rain, snow
 
 		-- 🔥 Combo 系统
 		enable_combo = true,
@@ -34,8 +35,8 @@ return {
 			["!"] = "explode",
 			["?"] = "sparkle",
 			["*"] = "sparkle",
-			["="] = "fizz", -- 气泡
-			[";"] = "rain", -- 雨滴
+			["="] = "fizz",
+			[";"] = "rain",
 			[":"] = "rain",
 			["+"] = "fire",
 			["<"] = "heart",

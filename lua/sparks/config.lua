@@ -13,6 +13,7 @@ M.defaults = {
 	-- 动画效果
 	animation_fps = 30, -- 动画帧率 (粒子系统使用较高帧率以保证流畅)
 	animation_style = "bounce", -- bounce, fade, slide, spin, wave
+	default_effect = "confetti", -- 默认动画效果 (当字符不在 triggers 中时使用)
 	-- 声音效果
 	enable_sound = true, -- 启用声音（默认关闭）
 	sound_on_insert = true, -- 输入时播放声音
@@ -46,6 +47,8 @@ M.defaults = {
 		["?"] = "sparkle", -- 问号闪烁
 		["*"] = "sparkle", -- 星号闪烁
 		["#"] = "matrix", -- 井号黑客矩阵
+		["0"] = "matrix", -- 0黑客矩阵
+		["1"] = "matrix", -- 1黑客矩阵
 		["="] = "fizz", -- 等号气泡
 		[";"] = "rain", -- 分号雨滴
 		[":"] = "rain", -- 冒号雨滴

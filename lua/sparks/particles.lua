@@ -55,11 +55,11 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			p.char = ({ ".", "o", "*", "~" })[math.random(4)]
 			p.dx = (math.random() - 0.5) * 1.5
 			p.dy = (math.random() - 0.5) * 1.0
-			p.life = 60
+			p.life = math.random(70, 90)
 		elseif type == "fire" then
 			p.char = ({ "^", "*", ",", "." })[math.random(4)]
 			p.dy = -math.abs(p.dy) - 0.2 -- 总是向上
-			p.life = 40
+			p.life = math.random(70, 90)
 			p.dx = p.dx * 0.5 -- 火焰横向扩散小一点
 			p.x = p.x + (math.random() - 0.5) * 2 -- 稍微打散底部
 		elseif type == "matrix" then
@@ -68,7 +68,7 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			p.dy = math.random() * 0.5 + 0.5 -- 垂直下落
 			p.x = p.x + math.random(-2, 2) -- 【关键】横向随机偏移，形成宽幅代码雨
 			p.color = "String" -- 通常绿色
-			p.life = 80
+			p.life = math.random(70, 90)
 			if heat_mode == "rainbow" then
 				p.color = nil
 			end
@@ -77,13 +77,13 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			p.dx = (math.random() - 0.5) * 0.5 -- 左右轻微飘动
 			p.dy = math.random() * 0.2 + 0.1 -- 缓慢下落
 			p.color = "Comment" -- 白色或淡灰
-			p.life = 100
+			p.life = math.random(70, 90)
 		elseif type == "heart" then
 			p.char = ({ "♥", "♡" })[math.random(2)]
 			p.dx = 0
 			p.dy = -0.2 -- 缓缓上升
 			p.color = "Red" -- 红色 (需确保有 SparksRed 高亮或 fallback)
-			p.life = 90
+			p.life = math.random(70, 90)
 			smart_color = "Error" -- 通常是红色
 		elseif type == "sparkle" then
 			p.char = "✦"
@@ -92,7 +92,7 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			p.x = p.x + (math.random() - 0.5) * 3 -- 初始位置散开
 			p.y = p.y + (math.random() - 0.5) * 2
 			p.color = "WarningMsg"
-			p.life = 50
+			p.life = math.random(70, 90)
 			-- 闪烁效果在 update 或 render 中处理，这里只做静态定义
 		elseif type == "rain" then
 			p.char = ({ "|", "!", "·" })[math.random(3)]
@@ -100,13 +100,58 @@ function M.spawn(x, y, count, type, text, heat_mode)
 			p.dy = math.random() * 0.5 + 0.5 -- 快速下落
 			p.x = p.x + math.random(-2, 2) -- 宽度展开，形成雨帘
 			p.color = "Function" -- 通常是蓝色
-			p.life = 60
+			p.life = math.random(70, 90)
 		elseif type == "fizz" then
 			p.char = ({ "o", "O", "." })[math.random(3)]
 			p.dx = (math.random() - 0.5) * 0.5
 			p.dy = -math.random() * 0.5 - 0.2 -- 向上冒泡
 			p.color = "Type" -- 通常是黄色/橙色
-			p.life = 70
+			p.life = math.random(70, 90)
+		-- 程序员的专属浪漫，我爱你们
+		elseif type == "yueyue" then
+			-- 🍓 草莓甜心风格
+			local chars = { "🍓", "玥", "~" }
+			p.char = chars[math.random(#chars)]
+			p.dx = (math.random() - 0.5) * 1.4 -- 飘逸扩散
+			p.dy = (math.random() - 0.5) * 0.6
+			p.color = "Identifier" -- 默认粉/紫
+			if p.char == "🍓" then
+				p.color = "Error" -- 红色
+			end
+			p.life = math.random(80, 100)
+		elseif type == "manman" then
+			-- 🥭 芒果清新风格
+			local chars = { "🥭", "曼", "~" }
+			p.char = chars[math.random(#chars)]
+			p.dx = (math.random() - 0.5) * 1.4 -- 飘逸扩散
+			p.dy = (math.random() - 0.5) * 0.6
+			p.color = "String" -- 默认绿色
+			if p.char == "🥭" then
+				p.color = "SparksMangoYellow" -- 这里的黄色更正
+			end
+			p.life = math.random(80, 100)
+		elseif type == "nghuhu" then
+			-- 🫖 快乐水壶风格
+			local chars = { "那", "个", "胡", "🫖" }
+			p.char = chars[math.random(#chars)]
+			p.dx = (math.random() - 0.5) * 1.6 -- 较宽的活跃移动
+			p.dy = (math.random() - 0.5) * 0.6
+			p.color = "Number" -- 橙色
+			if p.char == "🫖" then
+				p.color = "Title" -- 白/亮色
+			end
+			p.life = math.random(80, 100)
+		elseif type == "shenyiao" then
+			-- 💊 神药爆发风格
+			local chars = { "神", "药", "💊" }
+			p.char = chars[math.random(#chars)]
+			p.dx = (math.random() - 0.5) * 2.5 -- 极具爆发力
+			p.dy = (math.random() - 0.5) * 2.5
+			p.color = "Special" -- 紫色
+			if p.char == "💊" then
+				p.color = "WarningMsg"
+			end -- 闪电黄
+			p.life = math.random(80, 100)
 		end
 
 		-- 热度模式下的特殊处理

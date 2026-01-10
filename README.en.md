@@ -69,6 +69,7 @@ require("sparks").setup({
 
   -- 🚀 Physics
   animation_fps = 30,     -- (Recommend 30-60)
+  default_effect = "confetti", -- Default effect for non-triggered keys
 
   -- 🔥 Combo
   enable_combo = true,
@@ -88,19 +89,21 @@ require("sparks").setup({
   show_on_insert = true,  -- Show animation on character input
   show_on_delete = true,  -- Show animation on delete (insert mode only)
 
+  -- Effects: confetti, explode, matrix, snow, rain, fizz, fire, heart, sparkle
+
   -- ⌨️ Triggers (Key -> Effect)
   triggers = {
     ["{"] = "explode",
     ["("] = "confetti",
-    ["["] = "matrix",
-    ["!"] = "explode",
-    ["?"] = "sparkle",
-    ["="] = "fizz",
-    [";"] = "rain",
-    [":"] = "rain",
-    ["+"] = "fire",
-    ["<"] = "heart",
-    ["%"] = "confetti",
+    ["["] = "matrix",    -- Matrix
+    ["!"] = "explode",   -- Explode
+    ["?"] = "sparkle",   -- Sparkle
+    ["="] = "fizz",      -- Fizz
+    [";"] = "rain",      -- Rain
+    [":"] = "rain",      -- Rain
+    ["+"] = "fire",      -- Fire
+    ["<"] = "heart",     -- Heart
+    ["%"] = "confetti",  -- Confetti
   },
 
   -- 🔊 Sound

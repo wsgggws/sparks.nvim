@@ -56,6 +56,9 @@ local function start_animation_loop()
 		0,
 		tick_rate,
 		vim.schedule_wrap(function()
+			-- 0. 检查窗口是否需要更新（窗口大小/布局变化时）
+			window.check_and_update(config_mod.options)
+
 			if not window.is_valid() then
 				-- 尝试重建窗口
 				window.create(config_mod.options)

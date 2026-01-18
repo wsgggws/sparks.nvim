@@ -24,8 +24,10 @@ The most satisfying typing effects plugin for Neovim.
   your code's highlighting.
 - **💥 Screen Shake**: Optional screen shake on high-combo moments or deletions
   for extra impact.
-- **📱 Adaptive Layout**: Automatically adjusts animation window size and position
-  based on screen size for perfect display on small/large screens.
+- **📱 Adaptive Layout**:
+  - Automatically adjusts animation window size based on window dimensions
+  - Real-time response to window resize events with auto-repositioning
+  - Animation window follows the current editor window
 - **🎭 Diverse Effects**:
   - `confetti` (Default)
   - `explode` (On delete)

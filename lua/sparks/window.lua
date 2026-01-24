@@ -30,12 +30,13 @@ local function get_window_position(config_pos, width, height, win)
 
 	-- relative="win" 时，row/col 是相对于目标窗口的
 	-- top-right: 靠右边缘 = 窗口宽度 - 动画宽度 - offset
-	-- top-left: 靠左边缘 = 0
+	-- top-left: 靠左边缘 = 1
+	-- row 偏移 2 行，避免贴顶
 	local positions = {
-		["top-right"] = { row = 0, col = win_width - width - offset },
-		["top-left"] = { row = 0, col = 0 },
-		["bottom-right"] = { row = height + 1, col = win_width - width - offset },
-		["bottom-left"] = { row = height + 1, col = 0 },
+		["top-right"] = { row = 2, col = win_width - width - offset - 1 },
+		["top-left"] = { row = 2, col = 1 },
+		["bottom-right"] = { row = height + 1, col = win_width - width - offset - 1 },
+		["bottom-left"] = { row = height + 1, col = 1 },
 	}
 	return positions[config_pos] or positions["top-right"]
 end

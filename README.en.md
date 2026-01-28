@@ -71,7 +71,7 @@ require("sparks").setup({
 
   -- 🚀 Physics
   animation_fps = 30,     -- (Recommend 30-60)
-  default_effect = "confetti", -- Default effect for non-triggered keys
+  default_effect = { "confetti", "sparkle", "snow", "rain", "fizz" }, -- Default effect for non-triggered keys (supports array for random)
 
   -- 🔥 Combo
   enable_combo = true,

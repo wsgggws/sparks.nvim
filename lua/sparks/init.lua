@@ -26,6 +26,16 @@ local function throttle()
 	return true
 end
 
+-- 获取默认效果 (支持随机数组)
+local function get_default_effect()
+	local effect = config_mod.options.default_effect or "confetti"
+	if type(effect) == "table" and #effect > 0 then
+		local idx = math.random(#effect)
+		return effect[idx]
+	end
+	return effect
+end
+
 -- 动画循环
 local function start_animation_loop()
 	if state.timer then
@@ -164,7 +174,7 @@ local function trigger_effect(char, type)
 	end
 
 	-- 检查自定义触发器
-	local anim_type = config_mod.options.default_effect or "confetti"
+	local anim_type = get_default_effect()
 	if type == "insert" then
 		if config_mod.options.triggers[char] then
 			anim_type = config_mod.options.triggers[char]

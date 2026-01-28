@@ -66,7 +66,7 @@ require("sparks").setup({
 
   -- 🚀 物理粒子系统配置
   animation_fps = 30,     -- 帧率 (建议 30-60)
-  default_effect = "confetti", -- 默认特效 (当字符不在 triggers 中时使用)
+  default_effect = { "confetti", "sparkle", "snow", "rain", "fizz" }
 
   -- 🔥 Combo 系统
   enable_combo = true,

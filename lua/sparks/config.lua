@@ -12,8 +12,7 @@ M.defaults = {
 	special_char_animation = true, -- 为特殊字符启用特殊动画
 	-- 动画效果
 	animation_fps = 30, -- 动画帧率 (粒子系统使用较高帧率以保证流畅)
-	animation_style = "bounce", -- bounce, fade, slide, spin, wave
-	default_effect = "confetti", -- 默认动画效果 (当字符不在 triggers 中时使用)
+	default_effect = { "confetti", "sparkle", "snow", "rain", "fizz" }, -- 默认动画效果 (当字符不在 triggers 中时使用)
 	-- 声音效果
 	enable_sound = true, -- 启用声音（默认关闭）
 	sound_on_insert = true, -- 输入时播放声音

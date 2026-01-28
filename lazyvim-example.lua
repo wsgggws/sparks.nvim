@@ -9,7 +9,7 @@ return {
 
 		-- 🚀 粒子系统
 		animation_fps = 30,
-		default_effect = "confetti", -- 默认特效：confetti, fireworks, sparkle, rain, snow
+		default_effect = { "confetti", "sparkle", "snow", "rain", "fizz" }, -- 默认特效 (支持数组随机)
 
 		-- 🔥 Combo 系统
 		enable_combo = true,

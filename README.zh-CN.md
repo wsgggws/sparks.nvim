@@ -7,7 +7,7 @@ Neovim 插件：极具打击感的输入动画特效系统。
 > "写代码从未如此带感！"
 
 <div align="center">
-  <img src="assets/sparks-demo.gif" width="100%" />
+  <video src="https://github.com/user-attachments/assets/55db7e7b-a80f-481c-8fa6-604763233987" width="100%" controls autoplay loop muted></video>
 </div>
 
 ## ✨ 特性

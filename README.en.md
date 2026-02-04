@@ -7,7 +7,7 @@ The most satisfying typing effects plugin for Neovim.
 > "Coding has never been this addictive!"
 
 <div align="center">
-  <img src="assets/sparks-demo.gif" width="100%" />
+  <video src="https://github.com/user-attachments/assets/55db7e7b-a80f-481c-8fa6-604763233987" width="100%" controls autoplay loop muted></video>
 </div>
 
 [中文文档](README.md)

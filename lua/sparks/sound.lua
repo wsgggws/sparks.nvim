@@ -1,121 +1,92 @@
 local M = {}
 local uv = vim.uv or vim.loop
 
--- 声音播放节流状态
-local last_play_time = {
-	insert = 0,
-	delete = 0,
-}
-local sound_throttle_ms = 80 -- 优化：80ms 内相同类型声音只播放一次，避免机关枪效应
+local last_play = { insert = 0, delete = 0 }
+local throttle_ms = 80
 
--- 播放声音
+local function executable(name)
+	return vim.fn.executable(name) == 1
+end
+
+local function choose_file(sound_type, config)
+	local files = sound_type == "insert" and config.sound_file_insert or config.sound_file_delete
+	if type(files) == "string" then
+		return files
+	end
+	if type(files) == "table" and #files > 0 then
+		return files[math.random(#files)]
+	end
+	return nil
+end
+
+local function command_for(sound_type, config)
+	local file = choose_file(sound_type, config)
+	local is_mac = vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1
+	local is_windows = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
+	if is_mac and executable("afplay") then
+		file = file or string.format("/System/Library/Sounds/%s.aiff", sound_type == "insert" and "Pop" or "Bottle")
+		return {
+			"afplay",
+			"-v",
+			tostring(config.sound_volume),
+			"-r",
+			string.format("%.2f", 2.5 + math.random() * 0.7),
+			file,
+		}
+	end
+	if is_windows and executable("powershell") then
+		if file then
+			local escaped = file:gsub("'", "''"):gsub("/", "\\")
+			return {
+				"powershell",
+				"-NoProfile",
+				"-Command",
+				"(New-Object Media.SoundPlayer '" .. escaped .. "').PlaySync()",
+			}
+		end
+		local frequency = sound_type == "insert" and 800 or 400
+		return { "powershell", "-NoProfile", "-Command", string.format("[Console]::Beep(%d,100)", frequency) }
+	end
+	if file and executable("paplay") then
+		return { "paplay", file }
+	end
+	if file and executable("aplay") then
+		return { "aplay", file }
+	end
+	if file and executable("ffplay") then
+		return { "ffplay", "-nodisp", "-autoexit", "-v", "0", file }
+	end
+	if not file and executable("canberra-gtk-play") then
+		return { "canberra-gtk-play", "-i", sound_type == "insert" and "message" or "bell" }
+	end
+	if not file and executable("paplay") then
+		local name = sound_type == "insert" and "message" or "bell"
+		return { "paplay", "/usr/share/sounds/freedesktop/stereo/" .. name .. ".oga" }
+	end
+	return nil
+end
+
 function M.play(sound_type, config)
-	if not config.enable_sound then
-		return
+	if not config.enable_sound or config.sound_pack == "none" then
+		return false
 	end
 	if sound_type == "insert" and not config.sound_on_insert then
-		return
+		return false
 	end
 	if sound_type == "delete" and not config.sound_on_delete then
-		return
+		return false
 	end
-
-	-- 声音节流：防止快速连续触发造成卡顿
 	local now = uv.now()
-	if now - last_play_time[sound_type] < sound_throttle_ms then
-		return
+	if now - last_play[sound_type] < throttle_ms then
+		return false
 	end
-	last_play_time[sound_type] = now
-
-	-- 检测操作系统并播放声音
-	vim.schedule(function()
-		local sound_cmd = nil
-		local is_mac = vim.fn.has("mac") == 1
-		local is_linux = vim.fn.has("unix") == 1 and vim.fn.has("mac") == 0
-		local is_windows = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
-
-		local sound_files = nil
-
-		-- 处理 Sound Packs (如果未手动指定文件)
-		if
-			not config.sound_file_insert
-			and not config.sound_file_delete
-			and config.sound_pack
-			and config.sound_pack ~= "default"
-		then
-			-- Future: Add logic to load sound pack files here
-		end
-
-		if sound_type == "insert" then
-			sound_files = config.sound_file_insert
-		elseif sound_type == "delete" then
-			sound_files = config.sound_file_delete
-		end
-
-		-- 如果用户配置了自定义声音文件
-		if sound_files and #sound_files > 0 then
-			-- 确保是列表格式
-			if type(sound_files) == "string" then
-				sound_files = { sound_files }
-			end
-
-			-- 随机选择一个声音文件
-			math.randomseed(os.time() + vim.loop.hrtime())
-			local sound_file = sound_files[math.random(#sound_files)]
-
-			if is_mac then
-				-- 优化：播放速率提高到 2.5倍 - 3.2倍，极短促，高频输入不粘连
-				local rate = 2.5 + math.random() * 0.7
-				sound_cmd = string.format("afplay '%s' -v %.2f -r %.2f &", sound_file, config.sound_volume, rate)
-			elseif is_linux then
-				-- Linux 使用 paplay (PulseAuuvplay (ALSA)
-				if vim.fn.executable("paplay") == 1 then
-					sound_cmd = string.format("paplay '%s' &", sound_file)
-				elseif vim.fn.executable("aplay") == 1 then
-					sound_cmd = string.format("aplay '%s' &", sound_file)
-				elseif vim.fn.executable("ffplay") == 1 then
-					sound_cmd = string.format("ffplay -nodisp -autoexit -v 0 '%s' &", sound_file)
-				end
-			elseif is_windows then
-				-- Windows 使用 PowerShell 播放
-				local ps_script =
-					string.format([[(New-Object Media.SoundPlayer '%s').PlaySync()]], sound_file:gsub("/", "\\"))
-				sound_cmd = string.format('powershell -c "%s" &', ps_script)
-			end
-		else
-			-- 使用系统默认声音
-			if is_mac then
-				-- macOS 系统默认音效
-				local default_sound = sound_type == "insert" and "Pop" or "Bottle"
-				-- 优化：播放速率提高到 2.5倍 - 3.2倍
-				local rate = 2.5 + math.random() * 0.7
-				sound_cmd =
-					string.format("afplay /System/Library/Sounds/%s.aiff -v %.2f -r %.2f &", default_sound, config.sound_volume, rate)
-			elseif is_linux then
-				-- Linux 系统默认音效
-				if vim.fn.executable("paplay") == 1 then
-					local default_sound = sound_type == "insert" and "message" or "bell"
-					sound_cmd =
-						string.format("paplay /usr/share/sounds/freedesktop/stereo/%s.oga 2>/dev/null &", default_sound)
-				elseif vim.fn.executable("canberra-gtk-play") == 1 then
-					-- 使用 libcanberra (Ubuntu/Debian)
-					local event = sound_type == "insert" and "message" or "bell"
-					sound_cmd = string.format("canberra-gtk-play -i %s &", event)
-				elseif vim.fn.executable("beep") == 1 then
-					-- 降级到终端蜂鸣音
-					sound_cmd = "beep &"
-				end
-			elseif is_windows then
-				-- Windows 系统默认音效
-				local beep_freq = sound_type == "insert" and "800" or "400"
-				sound_cmd = string.format('powershell -c "[Console]::Beep(%s, 100)" &', beep_freq)
-			end
-		end
-
-		if sound_cmd then
-			vim.fn.system(sound_cmd)
-		end
-	end)
+	last_play[sound_type] = now
+	local command = command_for(sound_type, config)
+	if not command then
+		return false
+	end
+	vim.system(command, { detach = true }, function() end)
+	return true
 end
 
 return M

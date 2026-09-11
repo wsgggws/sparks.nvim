@@ -1,66 +1,65 @@
 local M = {}
 local health = vim.health or require("health")
--- 兼容不同版本的 health report 接口 (nvim 0.10+ vs old)
-local start_report = health.start or health.report_start
-local report_ok = health.ok or health.report_ok
-local report_warn = health.warn or health.report_warn
-local report_error = health.error or health.report_error
-local report_info = health.info or health.report_info
+local start = health.start or health.report_start
+local ok = health.ok or health.report_ok
+local warn = health.warn or health.report_warn
+local error = health.error or health.report_error
+local info = health.info or health.report_info
+
+local function has_sound_driver()
+	if vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1 then
+		return vim.fn.executable("afplay") == 1 and "afplay" or nil
+	end
+	if vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 then
+		return vim.fn.executable("powershell") == 1 and "PowerShell" or nil
+	end
+	for _, driver in ipairs({ "paplay", "aplay", "ffplay", "canberra-gtk-play" }) do
+		if vim.fn.executable(driver) == 1 then
+			return driver
+		end
+	end
+end
 
 function M.check()
-	start_report("Sparks.nvim check")
-
-	-- 1. 检查配置
-	local ok, config_mod = pcall(require, "sparks.config")
-	if ok and config_mod.options then
-		report_ok("Configuration loaded successfully.")
+	start("sparks.nvim")
+	if vim.fn.has("nvim-0.10") == 1 then
+		local version = vim.version()
+		ok(string.format("Neovim %d.%d.%d is supported", version.major, version.minor, version.patch))
 	else
-		report_error("Failed to load configuration.")
+		error("Neovim 0.10 or newer is required")
 	end
 
-	-- 2. 检查声音驱动
-	if config_mod and config_mod.options.enable_sound then
-		local found_driver = false
-		if vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1 then
-			if vim.fn.executable("afplay") == 1 then
-				report_ok("Sound driver found: afplay (macOS)")
-				found_driver = true
-			end
-		elseif vim.fn.has("unix") == 1 then
-			if vim.fn.executable("paplay") == 1 then
-				report_ok("Sound driver found: paplay (PulseAudio)")
-				found_driver = true
-			elseif vim.fn.executable("aplay") == 1 then
-				report_ok("Sound driver found: aplay (ALSA)")
-				found_driver = true
-			end
-		elseif vim.fn.has("win32") == 1 then
-			report_ok("Sound driver: PowerShell (Windows default)")
-			found_driver = true
-		end
+	local loaded, config = pcall(require, "sparks.config")
+	if loaded and config.options then
+		ok("Configuration loaded; preset=" .. config.options.preset .. ", render.mode=" .. config.options.render.mode)
+	else
+		error("Configuration could not be loaded")
+		return
+	end
 
-		if not found_driver then
-			report_warn("No supported sound driver found in PATH. Sound effects may not work.")
+	if config.options.enable_sound then
+		local driver = has_sound_driver()
+		if driver then
+			ok("Sound driver found: " .. driver)
+		else
+			warn("Sound is enabled but no supported player was found")
 		end
 	else
-		report_info("Sound is disabled in configuration.")
+		info("Sound is disabled (the default)")
 	end
 
-	-- 3. 检查 Treesitter (可选依赖)
-	if pcall(require, "nvim-treesitter") then
-		report_ok("nvim-treesitter found. Smart coloring is active.")
+	if vim.treesitter.get_captures_at_pos or vim.treesitter.get_captures_at_cursor then
+		ok("Treesitter-aware coloring is available")
 	else
-		report_warn("nvim-treesitter not installed. Falling back to default colors.")
+		warn("Treesitter capture helpers are unavailable; fallback colors will be used")
 	end
 
-	-- 4. 检查性能 (简易)
-	local fps = config_mod.options.animation_fps or 30
-	if fps < 10 then
-		report_warn("FPS setting is low (" .. fps .. "). Animation might look choppy.")
-	elseif fps > 60 then
-		report_warn("FPS setting is high (" .. fps .. "). This might affect editor performance.")
+	local fps = config.options.animation_fps
+	local budget = config.options.max_particles
+	if fps > 60 or budget > 500 then
+		warn(string.format("High render budget: %d FPS, %d particles", fps, budget))
 	else
-		report_ok("FPS setting is optimal (" .. fps .. ").")
+		ok(string.format("Render budget: %d FPS, at most %d particles", fps, budget))
 	end
 end
 

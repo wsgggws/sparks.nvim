@@ -1,446 +1,444 @@
 local M = {}
+M.version = "1.0.0"
 
-local config_mod = require("sparks.config")
-local window = require("sparks.window")
-local sound = require("sparks.sound")
-local particles = require("sparks.particles")
 local api = vim.api
+local config = require("sparks.config")
+local particles = require("sparks.particles")
+local sound = require("sparks.sound")
+local window = require("sparks.window")
 local uv = vim.uv or vim.loop
 
 local state = {
 	timer = nil,
 	last_trigger = 0,
-	combo_count = 0,
 	last_activity = 0,
-	is_animating = false,
-	active_text = nil, -- 当前显示的主文本
+	combo_count = 0,
+	active_text = nil,
+	diagnostic_errors = {},
 }
 
--- 节流
-local function throttle()
-	local now = uv.now()
-	if now - state.last_trigger < config_mod.options.throttle then
-		return false
+local function close_timer()
+	if state.timer then
+		state.timer:stop()
+		if not state.timer:is_closing() then
+			state.timer:close()
+		end
+		state.timer = nil
 	end
-	state.last_trigger = now
-	return true
 end
 
--- 获取默认效果 (支持随机数组)
-local function get_default_effect()
-	local effect = config_mod.options.default_effect or "confetti"
-	if type(effect) == "table" and #effect > 0 then
-		local idx = math.random(#effect)
-		return effect[idx]
-	end
-	return effect
+local function reset_runtime()
+	close_timer()
+	window.close()
+	particles.clear()
+	state.last_trigger = 0
+	state.last_activity = 0
+	state.combo_count = 0
+	state.active_text = nil
+	state.diagnostic_errors = {}
 end
 
--- 动画循环
-local function start_animation_loop()
+local function effect_from_default()
+	local value = config.options.default_effect
+	if type(value) == "table" then
+		return value[math.random(#value)]
+	end
+	return value
+end
+
+local function is_excluded()
+	local options = config.options
+	return vim.tbl_contains(options.excluded_filetypes, vim.bo.filetype)
+		or vim.tbl_contains(options.excluded_buftypes, vim.bo.buftype)
+		or (options.ignore_paste and vim.o.paste)
+		or (options.disable_on_macro and (vim.fn.reg_recording() ~= "" or vim.fn.reg_executing() ~= ""))
+end
+
+local function current_heat_mode()
+	local selected_threshold, selected_mode = -1, nil
+	for threshold, mode in pairs(config.options.heat_map or {}) do
+		if state.combo_count >= threshold and threshold > selected_threshold then
+			selected_threshold, selected_mode = threshold, mode
+		end
+	end
+	return selected_mode
+end
+
+local function combo_visible()
+	return state.active_text
+		and config.options.enable_combo
+		and config.options.render.combo_position ~= "none"
+		and state.combo_count >= config.options.combo_threshold
+end
+
+local function has_overlay_text()
+	return state.active_text and (config.options.render.show_text or combo_visible())
+end
+
+local function protect_cursor(grid)
+	if config.options.render.mode ~= "cursor" then
+		return
+	end
+	local center_x, center_y = window.cursor_cell(config.options)
+	local safe_radius = config.options.render.safe_radius
+	local minimum_x = center_x - safe_radius.x
+	local maximum_x = center_x + safe_radius.x
+	for y = math.max(1, center_y - safe_radius.y), math.min(particles.height, center_y + safe_radius.y) do
+		for x, cell in pairs(grid[y]) do
+			local width = math.max(1, vim.fn.strdisplaywidth(cell.char or ""))
+			if x <= maximum_x and x + width - 1 >= minimum_x then
+				grid[y][x] = nil
+			end
+		end
+	end
+end
+
+local function render_text_parts(grid, parts, y)
+	local total_width = 0
+	for index, part in ipairs(parts) do
+		total_width = total_width + vim.fn.strdisplaywidth(part.text)
+		if index < #parts then
+			total_width = total_width + 1
+		end
+	end
+	local x = math.max(1, math.floor((particles.width - total_width) / 2) + 1)
+	for _, part in ipairs(parts) do
+		grid[y][x] = { char = part.text, color = part.color }
+		x = x + math.max(1, vim.fn.strdisplaywidth(part.text)) + 1
+	end
+end
+
+local function overlay_text(grid)
+	local render = config.options.render
+	local center_y = math.floor((particles.height + 1) / 2)
+	local show_combo = combo_visible()
+	if render.show_text and state.active_text then
+		local parts = { { text = state.active_text, color = "SparksString" } }
+		if show_combo and render.combo_position == "center" then
+			table.insert(parts, { text = "x" .. state.combo_count, color = "SparksWarning" })
+		end
+		render_text_parts(grid, parts, center_y)
+	end
+	if show_combo and (not render.show_text or render.combo_position ~= "center") then
+		local rows = { top = 1, center = center_y, bottom = particles.height }
+		render_text_parts(
+			grid,
+			{ { text = "x" .. state.combo_count, color = "SparksWarning" } },
+			rows[render.combo_position]
+		)
+	end
+end
+
+local function start_animation()
 	if state.timer then
 		return
 	end
-
-	-- 使用与窗口相同的自适应大小
-	local cols = vim.o.columns
-	local width, height
-	if cols < 100 then
-		width, height = 22, 12
-	elseif cols < 150 then
-		width, height = 30, 16
-	else
-		width, height = 40, 20
-	end
-
-	if particles.width == 0 or particles.height == 0 then
-		particles.width = width
-		particles.height = height
-	end
-	window.create(config_mod.options)
-
+	local width, height = window.create(config.options)
+	particles.resize(width, height)
 	state.timer = uv.new_timer()
-	local tick_rate = math.floor(1000 / config_mod.options.animation_fps)
-
 	state.timer:start(
 		0,
-		tick_rate,
+		math.max(1, math.floor(1000 / config.options.animation_fps)),
 		vim.schedule_wrap(function()
-			-- 0. 检查窗口是否需要更新（窗口大小/布局变化时）
-			window.check_and_update(config_mod.options)
-
-			if not window.is_valid() then
-				-- 尝试重建窗口
-				window.create(config_mod.options)
-				if not window.is_valid() then
-					-- 如果还是失败，可能不适合继续
-					if state.timer then
-						state.timer:stop()
-						state.timer:close()
-						state.timer = nil
-					end
-					return
-				end
+			if not config.options.enabled then
+				reset_runtime()
+				return
 			end
-
-			-- 1. 更新粒子
+			local new_width, new_height = window.check_and_update(config.options)
+			particles.resize(new_width, new_height)
 			local has_particles = particles.update()
-
-			-- 2. 状态超时检查
-			local now = uv.now()
-			local combo_timeout = config_mod.options.combo_timeout
-
-			-- 优化：active_text 超时消失，但保留 combo_count 供下次累积
-			if now - state.last_activity > combo_timeout then
+			if state.active_text and uv.now() - state.last_activity > config.options.combo_timeout then
 				state.active_text = nil
+				state.combo_count = 0
 			end
-
-			-- 3. 如果没有粒子也没 Combo 显示，停止循环
-			-- 即使有 combo_count (在后台保持)，只要没显示 active_text 且没粒子，就关闭
-			if not has_particles and not state.active_text then
-				if state.timer then
-					state.timer:stop()
-					state.timer:close()
-					state.timer = nil
-				end
+			if not has_particles and not has_overlay_text() then
+				close_timer()
 				window.close()
 				return
 			end
-
-			-- 4. 生成渲染网格
 			local grid = particles.generate_grid()
-
-			-- 5. 将主文本 (Combo 或 当前字符) 叠加到网格中心
-			local cx_center = math.floor(particles.width / 2)
-			local cy_center = math.floor(particles.height / 2)
-
-			if state.active_text then
-				local display_str = ""
-				local parts = {}
-
-				table.insert(parts, { text = state.active_text, color = "SparksString" })
-
-				if config_mod.options.enable_combo and state.combo_count >= config_mod.options.combo_threshold then
-					table.insert(parts, { text = string.format("x%d", state.combo_count), color = "SparksWarning" })
-				end
-
-				-- 计算总长度并构建渲染数据
-				local total_len = 0
-				for i, part in ipairs(parts) do
-					total_len = total_len + #part.text
-					if i < #parts then
-						total_len = total_len + 1 -- padding
-					end
-				end
-
-				local start_x = cx_center - math.floor(total_len / 2)
-				local current_x = start_x
-
-				for i, part in ipairs(parts) do
-					for j = 1, #part.text do
-						local char = part.text:sub(j, j)
-						grid[cy_center][current_x + j] = { char = char, color = part.color }
-					end
-					current_x = current_x + #part.text + 1 -- plus padding
-				end
-			end
-
-			-- 6. 渲染
+			protect_cursor(grid)
+			overlay_text(grid)
 			window.render_grid(grid)
 		end)
 	)
 end
 
-local function trigger_effect(char, type)
-	-- 0. 智能屏蔽 (Smart Exclude)
-	-- 检查 filetype
-	if vim.tbl_contains(config_mod.options.excluded_filetypes, vim.bo.filetype) then
-		return
+local function normalize_event(event)
+	if type(event) == "string" then
+		return { effect = event }
 	end
-	-- 检查 buftype
-	if vim.tbl_contains(config_mod.options.excluded_buftypes, vim.bo.buftype) then
-		return
-	end
-
-	-- 性能检查：粘贴模式或宏录制时禁用
-	if config_mod.options.ignore_paste and vim.o.paste then
-		return
-	end
-	if config_mod.options.disable_on_macro and vim.fn.reg_recording() ~= "" then
-		return
-	end
-	if config_mod.options.disable_on_macro and vim.fn.reg_executing() ~= "" then
-		return
-	end
-
-	-- 检查自定义触发器
-	local anim_type = get_default_effect()
-	if type == "insert" then
-		if config_mod.options.triggers[char] then
-			anim_type = config_mod.options.triggers[char]
-		end
-	else
-		-- 删除操作使用爆炸效果
-		anim_type = "explode"
-	end
-
-	local now = uv.now()
-	state.last_activity = now
-
-	-- 更新 Combo
-	if type == "insert" then
-		state.combo_count = state.combo_count + 1
-	elseif type == "delete" then
-		state.combo_count = 0 -- 删除打断连击，确保 Combo 计数和字符同时消失
-	end
-
-	-- 计算热度等级
-	local heat_mode = nil
-	if config_mod.options.heat_map then
-		for threshold, mode in pairs(config_mod.options.heat_map) do
-			if state.combo_count >= threshold then
-				-- 简单的优先级逻辑：更高的阈值可能需要覆盖
-				if mode == "fire" then
-					heat_mode = "fire"
-				end
-				if mode == "rainbow" and heat_mode ~= "fire" then
-					heat_mode = "rainbow"
-				end
-			end
-		end
-	end
-
-	-- 触发粒子
-	local center_x = math.floor(particles.width / 2)
-	local center_y = math.floor(particles.height / 2)
-
-	if type == "insert" then
-		state.active_text = char
-		
-		-- 根据动画类型决定粒子数量，让特效更饱满
-		local spawn_count = 3 -- 默认
-		if anim_type == "matrix" then spawn_count = 8 end
-		if anim_type == "sparkle" then spawn_count = 6 end
-		-- 添加你的特效
-		if anim_type == "fire" then spawn_count = 6 end
-		if anim_type == "rain" then spawn_count = 5 end
-		if anim_type == "fizz" then spawn_count = 7 end
-		if anim_type == "explode" then spawn_count = 8 end
-		if anim_type == "snow" then spawn_count = 5 end
-		if anim_type == "yueyue" then spawn_count = 9 end
-		if anim_type == "manman" then spawn_count = 9 end
-		if anim_type == "nghuhu" then spawn_count = 9 end
-		if anim_type == "shenyiao" then spawn_count = 9 end
-
-		-- 每次按键发射粒子
-		particles.spawn(center_x, center_y, spawn_count, anim_type, char, heat_mode)
-
-		-- Combo 达到一定程度，释放更多
-		if state.combo_count > 0 and state.combo_count % 10 == 0 then
-			particles.spawn(center_x, center_y, 10, "explode", "*", heat_mode)
-			-- 震动效果
-			if config_mod.options.enable_shake then
-				window.shake(config_mod.options.shake_intensity or 1)
-				-- 100ms 后复位
-				vim.defer_fn(function()
-					window.shake(0)
-				end, 50)
-			end
-		end
-
-		sound.play("insert", config_mod.options)
-	elseif type == "delete" then
-		state.active_text = nil
-		particles.spawn(center_x, center_y, 8, "explode", char, heat_mode)
-		sound.play("delete", config_mod.options)
-
-		-- 删除也震动一下
-		if config_mod.options.enable_shake then
-			window.shake(1)
-			vim.defer_fn(function()
-				window.shake(0)
-			end, 50)
-		end
-	end
-
-	-- 启动循环 (使用 schedule 避免 textlock)
-	vim.schedule(start_animation_loop)
+	return vim.deepcopy(event or {})
 end
 
-local function setup_autocmds()
-	local group = api.nvim_create_augroup("Sparks", { clear = true })
-	local opts = config_mod.options
+function M.emit(event)
+	event = normalize_event(event)
+	if not config.options.enabled then
+		return false, "disabled"
+	end
+	local effect = event.effect or effect_from_default()
+	if not particles.has_effect(effect) then
+		return false, "unknown_effect"
+	end
+	if is_excluded() and not event.force then
+		return false, "excluded"
+	end
+	local now = uv.now()
+	if event.throttle ~= false and now - state.last_trigger < config.options.throttle then
+		return false, "throttled"
+	end
+	local width, height = window.capture(config.options)
+	particles.resize(width, height)
+	state.last_trigger = now
+	local kind = event.kind or "event"
+	if kind == "insert" then
+		if now - state.last_activity > config.options.combo_timeout then
+			state.combo_count = 0
+		end
+		state.combo_count = state.combo_count + 1
+		state.active_text = event.text
+	elseif kind == "delete" then
+		state.combo_count = 0
+		state.active_text = nil
+	elseif event.text then
+		state.active_text = event.text
+	end
+	state.last_activity = now
 
-	if opts.show_on_insert then
+	local intensity = math.max(0, tonumber(event.intensity) or 1)
+	local count =
+		math.max(0, math.floor(particles.default_count(effect) * config.options.particle_multiplier * intensity))
+	local center_x, center_y = window.emission_cell()
+	if count > 0 then
+		particles.spawn(center_x, center_y, count, effect, event.text or "*", current_heat_mode())
+	end
+
+	if kind == "insert" and state.combo_count > 0 and state.combo_count % 10 == 0 then
+		particles.spawn(center_x, center_y, math.floor(10 * intensity), "explode", "*", current_heat_mode())
+		if config.options.enable_shake then
+			window.shake(config.options.shake_intensity, config.options)
+			vim.defer_fn(function()
+				window.shake(0, config.options)
+			end, 50)
+		end
+	elseif kind == "delete" and config.options.enable_shake then
+		window.shake(1, config.options)
+		vim.defer_fn(function()
+			window.shake(0, config.options)
+		end, 50)
+	end
+
+	if kind == "insert" or kind == "delete" then
+		sound.play(kind, config.options)
+	end
+	vim.schedule(start_animation)
+	return true
+end
+
+function M.register_effect(name, definition)
+	return particles.register_effect(name, definition)
+end
+
+function M.enable()
+	config.options.enabled = true
+	return true
+end
+
+function M.disable()
+	config.options.enabled = false
+	reset_runtime()
+	return false
+end
+
+function M.toggle()
+	if config.options.enabled then
+		return M.disable()
+	end
+	return M.enable()
+end
+
+local function create_highlights()
+	api.nvim_set_hl(0, "SparksFloat", { bg = "NONE", fg = "NONE" })
+	local normal = api.nvim_get_hl(0, { name = "Normal", link = false })
+	api.nvim_set_hl(0, "SparksTransparentFloat", { bg = "NONE", fg = normal.fg or 0xffffff, blend = 100 })
+	local links = {
+		SparksComment = "Comment",
+		SparksConstant = "Constant",
+		SparksError = "Error",
+		SparksFunction = "Function",
+		SparksIdentifier = "Identifier",
+		SparksNumber = "Number",
+		SparksSpecial = "Special",
+		SparksString = "String",
+		SparksTitle = "Title",
+		SparksType = "Type",
+		SparksWarning = "WarningMsg",
+	}
+	for name, base in pairs(links) do
+		local hl = api.nvim_get_hl(0, { name = base, link = false })
+		api.nvim_set_hl(0, name, { fg = hl.fg, bg = "NONE", bold = hl.bold, italic = hl.italic, blend = 0 })
+	end
+	window.reset_highlights()
+end
+
+local function setup_input_events(group)
+	if config.options.show_on_insert then
 		api.nvim_create_autocmd("InsertCharPre", {
 			group = group,
 			callback = function()
-				if not throttle() then
-					return
-				end
-				trigger_effect(vim.v.char, "insert")
-			end,
-		})
-
-		-- 退出插入模式时立即清理状态
-		api.nvim_create_autocmd("InsertLeave", {
-			group = group,
-			callback = function()
-				state.active_text = nil
-				-- 保持 combo_count 还是清零取决于设计，这里选择清零以符合直觉
-				state.combo_count = 0
+				local effect = config.options.triggers[vim.v.char]
+				M.emit({ effect = effect, kind = "insert", text = vim.v.char })
 			end,
 		})
 	end
-
-	if opts.show_on_delete then
-		-- 将 prev_* 变量提升到函数作用域，方便 InsertCharPre 也能访问和更新
-		local prev_line_count = -1
-		local prev_line_content = ""
-		local prev_row = -1
-		local is_insert_char = false -- 标记是否正在输入字符
-
-		local function sync_state()
-			if not api.nvim_buf_is_valid(0) then
-				return
-			end
-			prev_line_count = api.nvim_buf_line_count(0)
+	if config.options.show_on_delete then
+		local previous = {}
+		local function snapshot()
 			local cursor = api.nvim_win_get_cursor(0)
-			prev_row = cursor[1]
-			local lines = api.nvim_buf_get_lines(0, prev_row - 1, prev_row, false)
-			prev_line_content = lines[1] or ""
+			previous = {
+				changedtick = vim.b.changedtick,
+				line_count = api.nvim_buf_line_count(0),
+				line = api.nvim_get_current_line(),
+				row = cursor[1],
+			}
 		end
-
-		-- 立即初始化
-		if api.nvim_buf_is_valid(0) then
-			sync_state()
-		end
-
-		-- 如果插件加载时已经在插入模式中，立即同步状态
-		local current_mode = api.nvim_get_mode().mode
-		if current_mode:match("^[iR]") then
-			sync_state()
-		end
-
-		-- 在字符输入前设置标记并同步状态
-		api.nvim_create_autocmd("InsertCharPre", {
-			group = group,
-			callback = function()
-				is_insert_char = true
-				sync_state()
-			end,
-		})
-
-		api.nvim_create_autocmd("TextChangedI", {
-			group = group,
-			callback = function()
-				if is_insert_char then
-					is_insert_char = false
-					sync_state()
-					return
-				end
-
-				local curr_line_count = api.nvim_buf_line_count(0)
-				local cursor = api.nvim_win_get_cursor(0)
-				local curr_row = cursor[1]
-				local curr_line_content = api.nvim_buf_get_lines(0, curr_row - 1, curr_row, false)[1] or ""
-
-				-- 如果有之前的状态，验证确实是删除
-				local is_confirmed_delete = false
-				if prev_line_count ~= -1 then
-					if curr_line_count < prev_line_count then
-						is_confirmed_delete = true
-					elseif curr_line_count == prev_line_count and #curr_line_content < #prev_line_content then
-						is_confirmed_delete = true
-					end
-				end
-
-				if prev_line_count == -1 or is_confirmed_delete then
-					trigger_effect("X", "delete")
-				end
-
-				sync_state()
-			end,
-		})
-
+		api.nvim_create_autocmd({ "InsertEnter", "InsertCharPre" }, { group = group, callback = snapshot })
 		api.nvim_create_autocmd("CursorMovedI", {
 			group = group,
 			callback = function()
-				local curr_cnt = api.nvim_buf_line_count(0)
-				if curr_cnt == prev_line_count then
-					local cursor = api.nvim_win_get_cursor(0)
-					if cursor[1] ~= prev_row then
-						sync_state()
-					end
+				if previous.changedtick == vim.b.changedtick then
+					snapshot()
 				end
 			end,
 		})
-
-		-- 进入插入模式时立即同步，不使用异步延迟
-		api.nvim_create_autocmd("InsertEnter", {
+		api.nvim_create_autocmd("TextChangedI", {
 			group = group,
 			callback = function()
-				sync_state()
+				local line_count = api.nvim_buf_line_count(0)
+				local cursor = api.nvim_win_get_cursor(0)
+				local line = api.nvim_get_current_line()
+				local deleted = previous.changedtick
+					and vim.b.changedtick ~= previous.changedtick
+					and (line_count < previous.line_count or (cursor[1] == previous.row and #line < #previous.line))
+				if deleted then
+					M.emit({ effect = "explode", kind = "delete", text = "X" })
+				end
+				snapshot()
 			end,
 		})
 	end
+	api.nvim_create_autocmd("InsertLeave", {
+		group = group,
+		callback = function()
+			state.active_text = nil
+			state.combo_count = 0
+		end,
+	})
 end
 
-function M.setup(opts)
-	config_mod.setup(opts)
-	if not config_mod.options.enabled then
-		return
+local function count_errors(buf)
+	local severity = vim.diagnostic.severity.ERROR
+	return #vim.diagnostic.get(buf, { severity = severity })
+end
+
+local function setup_integrations(group)
+	local integrations = config.options.integrations
+	if integrations.save.enabled then
+		api.nvim_create_autocmd("BufWritePost", {
+			group = group,
+			callback = function()
+				M.emit({ effect = integrations.save.effect, intensity = integrations.save.intensity, force = true })
+			end,
+		})
 	end
-
-	-- 诊断：检测加载时机
-	local current_mode = api.nvim_get_mode().mode
-	if current_mode:match("^[iR]") then
-		vim.notify(
-			"Sparks: 插件在插入模式中加载。如果删除动画不工作，请将加载事件改为 'InsertEnter'",
-			vim.log.levels.WARN
-		)
+	if integrations.diagnostics_clear.enabled then
+		api.nvim_create_autocmd("DiagnosticChanged", {
+			group = group,
+			callback = function(args)
+				local before = state.diagnostic_errors[args.buf] or 0
+				local after = count_errors(args.buf)
+				state.diagnostic_errors[args.buf] = after
+				if before > 0 and after == 0 then
+					M.emit({
+						effect = integrations.diagnostics_clear.effect,
+						intensity = integrations.diagnostics_clear.intensity,
+						force = true,
+					})
+				end
+			end,
+		})
 	end
-
-	-- 设置高亮
-	-- 使用 bg=NONE 以支持透明背景和 winblend
-	vim.api.nvim_set_hl(0, "SparksFloat", { bg = "NONE", fg = "NONE" })
-
-	local function create_nobg_hl(name, base)
-		local hl = vim.api.nvim_get_hl(0, { name = base, link = false })
-		-- 这里的 bg 设为 NONE，否则每个字符会有不透明的背景框
-		vim.api.nvim_set_hl(0, name, { fg = hl.fg, bg = "NONE", bold = hl.bold, italic = hl.italic })
+	if integrations.test_success.enabled then
+		for _, pattern in ipairs(integrations.test_success.user_events) do
+			api.nvim_create_autocmd("User", {
+				group = group,
+				pattern = pattern,
+				callback = function()
+					M.emit({
+						effect = integrations.test_success.effect,
+						intensity = integrations.test_success.intensity,
+						force = true,
+					})
+				end,
+			})
+		end
 	end
-	create_nobg_hl("SparksString", "String")
-	create_nobg_hl("SparksNumber", "Number")
-	create_nobg_hl("SparksWarning", "WarningMsg")
-	create_nobg_hl("SparksComment", "Comment")
+end
 
-	-- 自定义颜色
-	vim.api.nvim_set_hl(0, "SparksMangoYellow", { fg = "#FFD700", bg = "NONE", bold = true }) -- 纯金黄
+local function preview()
+	local effects = particles.effect_names()
+	for index, effect in ipairs(effects) do
+		vim.defer_fn(function()
+			M.emit({ effect = effect, text = effect, intensity = 1.5, force = true, throttle = false })
+		end, (index - 1) * 450)
+	end
+end
 
-	setup_autocmds()
-
-	-- 命令
-	vim.api.nvim_create_user_command("SparksToggle", function()
-		config_mod.options.enabled = not config_mod.options.enabled
-		vim.notify("Sparks: " .. (config_mod.options.enabled and "enabled" or "disabled"))
-	end, {})
-
-	vim.api.nvim_create_user_command("SparksTest", function()
-		trigger_effect("T", "insert")
-		vim.defer_fn(function()
-			trigger_effect("E", "insert")
-		end, 200)
-		vim.defer_fn(function()
-			trigger_effect("S", "insert")
-		end, 400)
-		vim.defer_fn(function()
-			trigger_effect("T", "insert")
-		end, 600)
-		vim.defer_fn(function()
-			trigger_effect("!", "explode")
-		end, 1000)
-	end, {})
+function M.setup(options)
+	local previous_options = config.options
+	config.setup(options)
+	local validation_error
+	local configured_effects = type(config.options.default_effect) == "table" and config.options.default_effect
+		or { config.options.default_effect }
+	for _, effect in ipairs(configured_effects) do
+		if not particles.has_effect(effect) then
+			validation_error = "sparks.nvim: unknown default effect '" .. tostring(effect) .. "'"
+			break
+		end
+	end
+	if not validation_error then
+		for key, effect in pairs(config.options.triggers) do
+			if not particles.has_effect(effect) then
+				validation_error = string.format("sparks.nvim: trigger %q uses unknown effect %q", key, effect)
+				break
+			end
+		end
+	end
+	if not validation_error then
+		for name, integration in pairs(config.options.integrations) do
+			if integration.enabled and not particles.has_effect(integration.effect) then
+				validation_error =
+					string.format("sparks.nvim: integration %q uses unknown effect %q", name, integration.effect)
+				break
+			end
+		end
+	end
+	if validation_error then
+		config.options = previous_options
+		error(validation_error, 2)
+	end
+	reset_runtime()
+	create_highlights()
+	local group = api.nvim_create_augroup("Sparks", { clear = true })
+	api.nvim_create_autocmd("ColorScheme", { group = group, callback = create_highlights })
+	setup_input_events(group)
+	setup_integrations(group)
+	api.nvim_create_user_command("SparksToggle", function()
+		vim.notify("Sparks: " .. (M.toggle() and "enabled" or "disabled"))
+	end, { force = true })
+	api.nvim_create_user_command("SparksTest", preview, { force = true })
+	api.nvim_create_user_command("SparksPreview", preview, { force = true })
+	return M
 end
 
 return M

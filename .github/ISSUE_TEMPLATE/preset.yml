@@ -1,0 +1,32 @@
+name: Preset proposal
+description: Propose a reusable sparks.nvim preset
+title: "preset: "
+labels: [preset]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Preset name
+    validations:
+      required: true
+  - type: textarea
+    id: audience
+    attributes:
+      label: Audience and use case
+      description: Explain when this preset is better than the four built-in presets.
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      render: lua
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Demo and benchmark
+      description: Add a GIF or recording, benchmark output, and reduced-motion notes.
+    validations:
+      required: true

@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: rhysd/action-setup-vim@v1
         with:
+          neovim: true
           version: ${{ matrix.neovim }}
       - run: make test
 
@@ -59,5 +60,6 @@ jobs:
       - uses: actions/checkout@v5
       - uses: rhysd/action-setup-vim@v1
         with:
+          neovim: true
           version: stable
       - run: make benchmark

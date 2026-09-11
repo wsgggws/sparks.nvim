@@ -24,7 +24,7 @@ jobs:
           - neovim: nightly
             experimental: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: rhysd/action-setup-vim@v1
         with:
           version: ${{ matrix.neovim }}
@@ -34,17 +34,29 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: JohnnyMorganz/stylua-action@v4
-        with:
-          version: 2.5.2
-          args: --check lua tests scripts lazyvim-example.lua
+      - uses: actions/checkout@v5
+      - name: Install StyLua
+        env:
+          STYLUA_VERSION: 2.5.2
+          STYLUA_SHA256: bcb0d855e91f102f28a370e850f8566b3b44b79e6274d806ea5246837c0fd5ab
+        run: |
+          archive="$RUNNER_TEMP/stylua-linux-x86_64.zip"
+          install_dir="$RUNNER_TEMP/stylua-bin"
+          curl --fail --location --retry 3 \
+            --output "$archive" \
+            "https://github.com/JohnnyMorganz/StyLua/releases/download/v${STYLUA_VERSION}/stylua-linux-x86_64.zip"
+          echo "${STYLUA_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p "$install_dir"
+          unzip -q "$archive" -d "$install_dir"
+          chmod +x "$install_dir/stylua"
+          echo "$install_dir" >> "$GITHUB_PATH"
+      - run: stylua --check lua tests scripts lazyvim-example.lua
 
   benchmark:
     name: Benchmark smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: rhysd/action-setup-vim@v1
         with:
           version: stable

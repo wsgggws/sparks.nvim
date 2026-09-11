@@ -1,189 +1,205 @@
-# Sparks.nvim
+# sparks.nvim
 
-Neovim 插件：极具打击感的输入动画特效系统。
+基于物理粒子的 Neovim 输入反馈插件。动画可以固定在右侧或跟随真实光标，继承当前
+语法颜色，支持 Combo、编辑器事件反馈和用户自定义特效，同时不会阻塞输入。
 
-**🎉 粒子物理引擎 | 🔥 Combo 连击系统 | 🔊 沉浸式音效 | 🌈 基于 Treesitter 的智能着色**
+[English](README.md)
 
-> "写代码从未如此带感！"
+![sparks.nvim 光标粒子演示](assets/demo.gif)
 
-<div align="center">
-  <video src="https://github.com/user-attachments/assets/55db7e7b-a80f-481c-8fa6-604763233987" width="100%" controls autoplay loop muted></video>
-</div>
+## 主要特性
 
-## ✨ 特性
+- 默认固定在右侧中部，也可固定在右上、右下或跟随光标。
+- 光标模式的空白区域完全透明，不再用矩形背景遮挡代码。
+- 内置 `subtle`、`power`、`zen`、`streamer` 四套风格预设。
+- 正确处理中文、符号、Emoji 的显示宽度和高亮位置。
+- 提供稳定的 `emit()` 和 `register_effect()` 公共接口。
+- 可在保存、诊断错误清零、测试成功时触发反馈。
+- Treesitter 智能着色、Combo 热度、屏幕震动和跨平台可选音效。
+- 自适应窗口尺寸、粒子数量上限和自动停止的渲染循环。
 
-- **⚛️ 物理粒子系统**：基于重力、阻力和初速度的实时粒子模拟，拒绝呆板的预制动画。
-- **🔥 Combo 连击系统**：
-  - 连续输入积累热度，触发 `x10` 连击显示。
-  - **热度升级**：连击数越高，特效越炫酷（彩虹模式 🌈 -> 火焰模式 🔥）。
-- **🎨 智能着色**：利用 Treesitter 自动识别当前语法的颜色，让烟花与代码融为一体。
-- **💥 屏幕震动**：高能时刻触发屏幕震动，打击感拉满（可选）。
-- **📱 自适应布局**：
-  - 根据窗口大小自动调整动画窗口尺寸，完美适配小屏/大屏
-  - 实时响应窗口大小变化，分屏调整时自动重新定位 动画窗口跟随当前编辑窗口，切换窗口时自动适配 **🎭 多种动画预设**： `confetti` (彩带) - 默认输入
-  - `explode` (爆炸) - 删除字符
-  - `matrix` (黑客帝国) - 绿色代码雨
-  - `snow` (飞雪) - 舒缓飘落
-  - `rain` (雨滴) - 蓝色雨帘
-  - `fizz` (气泡) - 向上冒泡
-  - `fire` (火焰) - 向上升腾
-  - `heart` (爱心) - 飘起的爱心
-- **🔊 沉浸音效**：
-  - 通过 `sound_pack` 一键切换音效主题（机械键盘、科幻等）
-  - 智能节流优化，80ms 内相同音效只播放一次，避免卡顿
-  - **macOS 专属优化**：使用 `afplay` 变速播放 (+250% 速率)，模拟极短促机械轴手感。
-- **⚡ 极致性能**：
-  - **✨ 视觉淡出**：粒子生命周期结束时会逐渐缩小变淡，细节感拉满。
-  - **🛡️ 智能屏蔽**：自动在 Telescope、NvimTree、Terminal 等窗口禁用，专注核心编辑。
-  - **🧩 智能复用**：复用窗口、Paste 模式检测、宏录制检测，零干扰。
+## 要求与安装
 
-## 📦 安装
+- Neovim 0.10 或更高版本。
+- Treesitter parser 是可选项；缺少时自动使用后备颜色。
+- 声音默认关闭，可选使用 `afplay`、`paplay`、`aplay`、`ffplay`、
+  PowerShell 或 `canberra-gtk-play`。
 
-### LazyVim / lazy.nvim
+使用 lazy.nvim：
 
 ```lua
 {
   "wsgggws/sparks.nvim",
   event = "VeryLazy",
   opts = {
-    -- 🚀 默认已启用所有最佳配置
+    preset = "power",
   },
 }
 ```
 
-## ⚙️ 配置手册
+## 风格预设
+
+| 预设 | 风格 | FPS | 粒子上限 | 删除反馈 | 震动 |
+| --- | --- | ---: | ---: | --- | --- |
+| `subtle` | 克制、轻微闪烁 | 24 | 80 | 关闭 | 关闭 |
+| `power` | 平衡、有打击感 | 30 | 180 | 开启 | 开启 |
+| `zen` | 缓慢飞雪和气泡 | 20 | 60 | 关闭 | 关闭 |
+| `streamer` | 适合录屏和直播 | 60 | 400 | 开启 | 开启 |
+
+显式配置会覆盖预设：
 
 ```lua
 require("sparks").setup({
-  -- 基础开关
-  enabled = true,
-  position = "top-right", -- 动画显示位置（会根据屏幕大小自动调整）
-
-  -- 🚀 物理粒子系统配置
-  animation_fps = 30,     -- 帧率 (建议 30-60)
-  default_effect = { "confetti", "sparkle", "snow", "rain", "fizz" }, -- 默认特效 (当字符不在 triggers 中时使用，支持数组随机)
-
-  -- 🔥 Combo 系统
-  enable_combo = true,
-  combo_threshold = 1,    -- 多少连击开始显示计数
-  combo_timeout = 400,    -- 连击断开时间(ms)
-
-  -- 热度映射：连击数 -> 特效模式
-  heat_map = {
-    [10] = "rainbow", -- >10 连击：七彩粒子
-    [20] = "fire",    -- >20 连击：火焰升腾
+  preset = "subtle",
+  position = "cursor",
+  render = {
+    radius = 5,
+    avoid_completion_menu = true,
+    transparent = true,
+    show_text = false,
+    combo_position = "top",
+    safe_radius = { x = 1, y = 0 },
+    offset = { x = 2, y = 1 },
   },
-
-  -- 🫨 打击感
-  enable_shake = true,    -- 连击爆发时窗口震动
-
-  -- 输入/删除特效开关
-  show_on_insert = true,  -- 输入字符时显示动画
-  show_on_delete = true,  -- 删除字符时显示动画（仅插入模式）
-
-  -- 动画预设
-  -- 基础: confetti, explode, matrix, snow, rain, fizz, fire, heart, sparkle
-
-  -- ⌨️ 高级触发器 (按键 -> 动画类型)
-  triggers = {
-    ["{"] = "explode",   -- 爆炸
-    ["("] = "confetti",  -- 彩带
-    ["["] = "matrix",    -- 黑客帝国
-    ["!"] = "explode",   -- 爆炸
-    ["?"] = "sparkle",   -- 闪烁
-    ["="] = "fizz",      -- 气泡
-    [";"] = "rain",      -- 雨滴
-    [":"] = "rain",      -- 雨滴
-    ["+"] = "fire",      -- 火焰
-    ["<"] = "heart",     -- 爱心
-    ["%"] = "confetti",  -- 彩带
-  },
-
-  -- 🔊 声音配置
-  enable_sound = true,    -- 启用声音
-  sound_on_insert = true, -- 输入时播放声音
-  sound_on_delete = true, -- 删除时播放声音
-  sound_volume = 5.0,     -- 音量 (0.0 - 5.0)
-  sound_pack = "default", -- default, mechanical, sci-fi
-  -- 声音会自动节流（80ms），避免快速操作时卡顿
-
-  -- 🛡️ 智能屏蔽 (列表中的窗口不触发动画)
-  excluded_filetypes = {
-    "TelescopePrompt",
-    "NvimTree",
-    "neo-tree",
-    "lazy",
-    "mason",
-  },
-  excluded_buftypes = { "nofile", "terminal", "prompt" },
-
-  -- 外观
-  winblend = 0,           -- 窗口透明度(0-100)，默认 0。设置 > 0 以透出光标行背景
+  max_particles = 100,
 })
 ```
 
-## 🎮 命令
+运行 `:SparksPreview` 可以依次预览全部已注册特效。
 
-- `:SparksToggle` - 切换插件开关
-- `:SparksTest` - 测试动画效果
-- `:checkhealth sparks` - 诊断配置健康状态
-
-## 🔊 声音支持
-
-- **macOS**: `afplay`
-- **Linux**: `paplay` (PulseAudio), `aplay` (ALSA)
-- **Windows**: PowerShell SoundPlayer
+## 常用配置
 
 ```lua
-opts = {
-  enable_sound = true,
-  sound_file_insert = { "C:\\Windows\\Media\\Windows Ding.wav" },
-  sound_file_delete = { "C:\\Windows\\Media\\Windows Error.wav" },
-}
+require("sparks").setup({
+  enabled = true,
+  preset = "power",
+  position = "right-center", -- top-right、right-center、bottom-right 或 cursor
+  duration = 1200,
+  throttle = 30,
+  animation_fps = 30,
+  max_particles = 180,
+  particle_multiplier = 1,
+  default_effect = { "confetti", "sparkle", "snow", "rain", "fizz" },
+
+  render = {
+    radius = 6,
+    avoid_completion_menu = true,
+    transparent = false, -- 固定位置默认 false；光标模式默认 true
+    show_text = true, -- 固定位置默认 true；光标模式默认 false
+    combo_position = "center", -- 光标模式默认 top；none 表示隐藏
+    safe_radius = { x = 1, y = 0 }, -- 仅用于光标模式
+    offset = { x = 2, y = 1 }, -- 仅用于光标模式
+  },
+
+  show_on_insert = true,
+  show_on_delete = true,
+  enable_combo = true,
+  combo_threshold = 1,
+  combo_timeout = 400,
+  heat_map = {
+    [10] = "rainbow",
+    [20] = "fire",
+  },
+  enable_shake = true,
+  shake_intensity = 1,
+
+  triggers = {
+    ["{"] = "explode",
+    ["["] = "matrix",
+    ["?"] = "sparkle",
+    ["+"] = "fire",
+    ["<"] = "heart",
+  },
+
+  enable_sound = false,
+  sound_pack = "default", -- default 或 none
+  sound_volume = 1,
+  sound_file_insert = nil, -- 字符串或路径列表
+  sound_file_delete = nil,
+
+  ignore_paste = true,
+  disable_on_macro = true,
+  excluded_filetypes = { "TelescopePrompt", "NvimTree", "neo-tree", "lazy", "mason", "dashboard" },
+  excluded_buftypes = { "nofile", "terminal", "prompt" },
+  winblend = 0, -- 固定位置或 transparent=false 时生效
+
+  integrations = {
+    save = { enabled = false, effect = "sparkle", intensity = 1 },
+    diagnostics_clear = { enabled = false, effect = "confetti", intensity = 2 },
+    test_success = {
+      enabled = false,
+      effect = "fire",
+      intensity = 3,
+      user_events = { "SparksTestSuccess" },
+    },
+  },
+})
 ```
 
-### Linux 用户配置示例
+`position` 是主要位置配置。固定位置默认使用不透明浮窗、显示事件文字、居中显示
+Combo，并使用 `winblend`。设置 `position = "cursor"` 后会自动启用透明背景、隐藏
+重复输入字符、把 Combo 放在顶部，并保护光标行中央的三个单元。`render.offset` 只
+作用于光标模式，正数 `x` 向右、正数 `y` 向下。旧的
+`render.mode = "cursor" | "corner"` 仍兼容，但新配置建议统一使用 `position`。只有未
+显式配置对应 render 字段时才会使用模式默认值；显式配置始终优先。
+
+完整默认配置和行为契约见英文 [README](README.md) 或 `:help sparks-config`。
+
+## 公共接口
+
+其他插件、映射或 autocmd 可以直接发射反馈：
 
 ```lua
-opts = {
-  enable_sound = true,
-  -- 使用 freedesktop 音效或自己的音频文件
-  sound_file_insert = { "/usr/share/sounds/freedesktop/stereo/message.oga" },
-  sound_file_delete = { "/usr/share/sounds/freedesktop/stereo/bell.oga" },
-}
+local accepted, reason = require("sparks").emit({
+  effect = "confetti",
+  text = "PASS",
+  intensity = 2,
+  force = true,
+  throttle = false,
+})
 ```
 
-**注意**:
+成功时返回 `true`；拒绝时返回 `false`，原因是 `disabled`、`excluded`、
+`throttled` 或 `unknown_effect`。
 
-- 声音默认关闭，需要手动设置 `enable_sound = true`
-- 如果不配置声音文件，将自动使用系统默认音效
-- 支持多个声音文件，每次随机播放增加趣味性
-- 建议戴耳机使用，音量不宜过大
+注册数据驱动特效：
 
-## 🎨 自定义样式
+```lua
+require("sparks").register_effect("comet", {
+  chars = { "*", ".", "+" },
+  count = 8,
+  life = { 20, 35 },
+  gravity = 0.04,
+  drag = 0.98,
+  velocity = function(context)
+    return (math.random() - 0.5) * 1.8, -0.8
+  end,
+})
+```
 
-动画使用的高亮组：
+测试工具各不相同，因此测试成功集成使用 `User` 事件：
 
-- 输入：`String`
-- 删除：`WarningMsg`
+```lua
+vim.api.nvim_exec_autocmds("User", { pattern = "SparksTestSuccess" })
+```
 
-可通过设置这些高亮组来自定义颜色。
+## 命令
 
-**提示**：如果你发现动画窗口背景遮挡了光标行高亮（CursorLine），可以在配置中设置 `winblend = 10` 或更高，来开启透明效果。
+- `:SparksToggle`：启用或禁用全部反馈；禁用时立即关闭浮窗。
+- `:SparksTest` / `:SparksPreview`：依次预览所有已注册特效。
+- `:checkhealth sparks`：检查版本、声音驱动、着色能力和渲染预算。
 
-## 🚀 性能
+## 开发
 
-- 使用节流机制避免频繁触发（输入节流 100ms，声音节流 50ms）
-- 异步窗口管理，不阻塞编辑
-- 自动清理资源
-- **自适应窗口尺寸**：
-  - 根据窗口宽度实时调整大小：
-    - 小窗口 (< 40 列)：16x8 窗口
-    - 中等窗口 (40-60 列)：20x10 窗口
-    - 大窗口 (> 60 列)：26x12 窗口
-  - 窗口大小变化时自动重新定位
-  - 切换编辑窗口时自动适配新窗口
+```sh
+make test
+make lint
+make benchmark
+make demo
+```
 
-## 📄 License
+欢迎贡献新的 preset 和 effect，详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## License
 
 MIT

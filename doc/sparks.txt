@@ -1,0 +1,329 @@
+*sparks.txt*                    Physics-based feedback for Neovim
+
+=============================================================================
+CONTENTS                                                     *sparks-contents*
+
+1. Introduction ................................................. |sparks|
+2. Setup .................................................... |sparks-setup|
+3. Presets ................................................ |sparks-presets|
+4. Configuration ............................................ |sparks-config|
+5. Public interface ...................................... |sparks-interface|
+6. Custom effects .................................. |sparks-custom-effects|
+7. Integrations ...................................... |sparks-integrations|
+8. Commands ................................................ |sparks-commands|
+9. Health and performance ............................... |sparks-health|
+
+=============================================================================
+INTRODUCTION                                                       *sparks*
+
+sparks.nvim adds visual feedback to typing and editor events. Particles are
+rendered in a non-focusable floating window fixed at the right-center by
+default. Neovim 0.10 or newer is required.
+
+Treesitter parsers and sound players are optional. Without a parser, Sparks
+uses fallback highlight groups. Sound is disabled by default.
+
+=============================================================================
+SETUP                                                        *sparks-setup*
+
+Minimal setup: >lua
+
+    require("sparks").setup()
+<
+With lazy.nvim: >lua
+
+    {
+      "wsgggws/sparks.nvim",
+      event = "VeryLazy",
+      opts = { preset = "power" },
+    }
+<
+Calling setup() again replaces the active configuration, autocmds, commands,
+particle state, combo state, timer, and overlay. Registered custom effects are
+preserved. setup() returns the sparks module.
+
+=============================================================================
+PRESETS                                                    *sparks-presets*
+
+The `preset` option is applied before explicit options. Explicit values win.
+
+subtle      24 FPS, 80 particles, no delete feedback, combo, or shake.
+power       30 FPS, 180 particles, balanced effects, combo, and shake.
+zen         20 FPS, 60 particles, slow effects and reduced motion.
+streamer    60 FPS, 400 particles, high-intensity recording mode.
+
+Example: >lua
+
+    require("sparks").setup({
+      preset = "subtle",
+      max_particles = 100,
+    })
+<
+=============================================================================
+CONFIGURATION                                                *sparks-config*
+
+The following names and meanings form the stable v1 configuration interface.
+
+enabled ~
+    Boolean. Master switch. Default: true.
+
+preset ~
+    One of "subtle", "power", "zen", or "streamer". Default: "power".
+
+position ~
+    Main placement option. "top-right", "right-center", and "bottom-right"
+    use fixed placement. "cursor" follows the active cursor. The legacy
+    "top-left" and "bottom-left" values remain available. Default:
+    "right-center".
+
+render.mode ~
+    Compatibility option for existing configurations. Explicit "cursor",
+    "fixed", or the legacy "corner" overrides the mode inferred from
+    `position`. New configurations should use `position` instead.
+
+render.radius ~
+    Approximate vertical particle radius in cursor mode. The overlay width is
+    adapted for terminal cell aspect ratio. Default: 6.
+
+render.avoid_completion_menu ~
+    Keep the overlay z-index below completion menus. Default: true.
+
+render.transparent ~
+    Make empty overlay cells transparent while keeping particle cells opaque.
+    Defaults to true in cursor mode and false in fixed mode. When false, the
+    top-level `winblend` value is used. An explicit value overrides the
+    mode-specific default.
+
+render.show_text ~
+    Repeat event or inserted text in the overlay. Defaults to false in cursor
+    mode so text under the cursor remains readable, and true in fixed mode.
+
+render.combo_position ~
+    Place the combo label at "top", "center", or "bottom". "none" hides the
+    label without disabling combo counting or heat levels. Defaults to "top"
+    in cursor mode and "center" in fixed mode.
+
+render.safe_radius ~
+    A table with non-negative integer `x` and `y` radii. Particles intersecting
+    this area around the cursor are not drawn. Default: { x = 1, y = 0 }, which
+    protects three cells on the cursor row. Use { x = 0, y = 0 } to protect
+    only the cursor cell.
+
+render.offset ~
+    Integer `x` and `y` offsets for the cursor-mode visual center. Positive `x`
+    moves right and positive `y` moves down; negative values move in the opposite
+    directions. Default: { x = 2, y = 1 }. The protected area remains attached
+    to the real cursor rather than moving with the visual center.
+
+duration ~
+    Particle lifetime in milliseconds. Default: 1200.
+
+animation_fps ~
+    Render frequency from 1 through 120. Default: 30.
+
+throttle ~
+    Minimum milliseconds between ordinary input events. Default: 30.
+
+max_particles ~
+    Hard upper bound for live particles. Default: 180.
+
+particle_multiplier ~
+    Multiplier applied to each effect's emission count. Default: 1.
+
+default_effect ~
+    Effect name or a list randomly selected for ordinary input.
+
+particle_colors ~
+    Map from effect name to a list of Neovim highlight groups.
+
+show_on_insert, show_on_delete ~
+    Enable insert and delete detection. Both default to true.
+
+enable_combo, combo_threshold, combo_timeout ~
+    Control combo counting. A combo restarts after `combo_timeout`
+    milliseconds of inactivity or after leaving Insert mode.
+
+heat_map ~
+    Map of combo threshold to "rainbow", "fire", or a custom mode used by an
+    effect. The highest matching numeric threshold wins.
+
+enable_shake, shake_intensity ~
+    Control milestone and delete shake. Defaults: true and 1.
+
+triggers ~
+    Map from inserted character to effect name.
+
+enable_sound ~
+    Enable external sound playback. Default: false.
+
+sound_pack ~
+    "default" plays a platform sound; "none" suppresses sounds. Custom sound
+    files override the platform default.
+
+sound_volume ~
+    Playback volume from 0 through 5 where supported. Default: 1.
+
+sound_file_insert, sound_file_delete ~
+    A path or list of paths. A list is selected randomly.
+
+ignore_paste, disable_on_macro ~
+    Suppress ordinary feedback during paste or macro activity. Both true.
+
+excluded_filetypes, excluded_buftypes ~
+    Lists that suppress ordinary feedback. emit({ force = true }) bypasses
+    these exclusions but never bypasses the master `enabled` switch.
+
+border, winblend ~
+    Standard floating-window border and blend options. `winblend` controls
+    fixed mode and cursor mode when `render.transparent` is false. Transparent
+    cursor mode uses a fully transparent window with opaque particle highlights.
+
+integrations ~
+    See |sparks-integrations|.
+
+=============================================================================
+PUBLIC INTERFACE                                          *sparks-interface*
+
+setup({options})                                      *sparks.setup()*
+    Normalize configuration, reset runtime state, and install commands and
+    autocmds. Returns the sparks module. Invalid options raise an error.
+
+emit({event})                                           *sparks.emit()*
+    Emit feedback. Accepted fields:
+
+      effect       Registered effect name. The configured default is used
+                   when omitted.
+      text         Optional event text. It is shown in the overlay only when
+                   `render.show_text` is true, but remains available to effects.
+      kind         "insert", "delete", or an application-defined event.
+      intensity    Positive multiplier for the particle count.
+      force        Bypass buffer and activity exclusions.
+      throttle     Set false to bypass event throttling.
+
+    Returns true when accepted. Rejection returns false plus one of:
+
+      "disabled"       The master switch is off.
+      "excluded"       The buffer or current activity is excluded.
+      "throttled"      The event arrived inside the throttle interval.
+      "unknown_effect" The requested effect is not registered.
+
+    Example: >lua
+
+      local accepted, reason = require("sparks").emit({
+        effect = "confetti",
+        text = "PASS",
+        intensity = 2,
+        force = true,
+      })
+<
+register_effect(name, definition)              *sparks.register_effect()*
+    Register a new effect. Returns true on success or false plus an error
+    message. Built-in effects cannot be replaced.
+
+enable(), disable(), toggle()  *sparks.enable()* *sparks.disable()* *sparks.toggle()*
+    Change the master switch. disable() immediately stops rendering and closes
+    the overlay. toggle() returns the new enabled state.
+
+version                                                     *sparks.version*
+    The stable interface version. Current value: "1.0.0".
+
+=============================================================================
+CUSTOM EFFECTS                                        *sparks-custom-effects*
+
+Data-driven definition: >lua
+
+    require("sparks").register_effect("comet", {
+      chars = { "*", ".", "+" },
+      count = 8,
+      life = { 20, 35 },
+      gravity = 0.04,
+      drag = 0.98,
+      velocity = function(context)
+        return (math.random() - 0.5) * 1.8, -0.8
+      end,
+      update = function(particle)
+        -- Optional per-frame mutation.
+      end,
+    })
+<
+`chars` is a non-empty list. `count` is the base emission count. `life` is a
+minimum/maximum frame pair. `velocity(context)` returns dx and dy. `gravity`
+and `drag` apply when no custom `update` function is supplied.
+
+A function may also be registered. It receives a new particle and a context
+table, and mutates that particle: >lua
+
+    require("sparks").register_effect("straight_up", function(particle)
+      particle.char = "^"
+      particle.dx = 0
+      particle.dy = -1
+      particle.life = 30
+    end)
+<
+=============================================================================
+INTEGRATIONS                                            *sparks-integrations*
+
+Integrations are disabled by default: >lua
+
+    require("sparks").setup({
+      integrations = {
+        save = { enabled = true, effect = "sparkle", intensity = 1 },
+        diagnostics_clear = {
+          enabled = true,
+          effect = "confetti",
+          intensity = 2,
+        },
+        test_success = {
+          enabled = true,
+          effect = "fire",
+          intensity = 3,
+          user_events = { "SparksTestSuccess" },
+        },
+      },
+    })
+<
+`save` responds to BufWritePost. `diagnostics_clear` responds when a buffer
+transitions from one or more ERROR diagnostics to none.
+
+Test runners should fire a configured User event after success: >lua
+
+    vim.api.nvim_exec_autocmds("User", {
+      pattern = "SparksTestSuccess",
+    })
+<
+Other plugins may call |sparks.emit()| directly.
+
+=============================================================================
+COMMANDS                                                  *sparks-commands*
+
+:SparksToggle                                             *:SparksToggle*
+    Toggle the master switch and report the new state.
+
+:SparksTest                                                   *:SparksTest*
+:SparksPreview                                             *:SparksPreview*
+    Cycle through every registered effect.
+
+:checkhealth sparks
+    Check the Neovim version, configuration, sound player, Treesitter capture
+    support, and render budget.
+
+=============================================================================
+HEALTH AND PERFORMANCE                                      *sparks-health*
+
+Run: >vim
+
+    :checkhealth sparks
+<
+The animation loop stops when no particle or center text remains. The particle
+budget is bounded by `max_particles`. Treesitter capture results are cached by
+buffer, changedtick, and cursor position. Sound processes receive argument
+arrays and never execute a shell command assembled from a file path.
+
+Repository benchmark: >sh
+
+    make benchmark
+<
+Set SPARKS_BENCH_MAX_MS to turn the local benchmark into a machine-specific
+regression assertion.
+
+vim:tw=78:ts=8:noet:ft=help:norl:
